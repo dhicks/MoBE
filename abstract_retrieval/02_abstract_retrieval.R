@@ -5,7 +5,7 @@ library(stringr)
 
 source('api_key.R')
 
-load('01_papers_by_auid.Rdata')
+load('01_authors_and_papers.Rdata')
 
 scrape = function (this_sid) {
     base_url = 'https://api.elsevier.com/content/abstract/scopus_id/'
@@ -44,7 +44,8 @@ scrape = function (this_sid) {
         list()
     surnames = author_nodes %>%
         xml_find_first('ce:surname') %>%
-        xml_text()
+        xml_text() %>%
+        list()
     given_names = author_nodes %>%
         xml_find_first('ce:given-name') %>%
         xml_text() %>%
@@ -68,6 +69,23 @@ abstracts_df = papers_by_auid$scopus_id %>%
     # head() %>%
     plyr::ldply(scrape, 
                 .progress = 'text')
+
+abstracts_df = abstracts_df %>%
+    unnest(auids, surnames, given_names, .drop = FALSE) %>%
+    left_join(unnest(authors), by = 'auids') %>%
+    filter(!is.na(id)) %>%
+    select(-surnames, -given_names) %>%
+    group_by(scopus_id, doi, title, journal, date, 
+             abstract) %>%
+    summarize(keywords = list(first(keywords)),
+              author_ids = list(id),
+              author_groups = list(group),
+              surnames = list(surname),
+              given_names = list(given_name), 
+              auids = list(auids),
+              raw = first(raw))
+
+save(abstracts_df, file = '02_abstracts.Rdata')
 
 abstracts_df %>%
     select(-raw) %>%

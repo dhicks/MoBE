@@ -5,7 +5,14 @@ library(stringr)
 
 source('api_key.R')
 
-authors = read_csv('test_auids.csv')
+authors = readxl::read_excel('../../Eisen-data/00_author_list.xlsx')
+
+authors = authors %>%
+    mutate(auid = str_extract(scopus_page, '[0-9]+')) %>%
+    select(-scopus_page) %>%
+    group_by(group, id, surname, given_name) %>%
+    summarize(auids = list(auid)) %>%
+    ungroup()
 
 scrape = function (this_auid) {
     base_url = 'https://api.elsevier.com/content/search/scopus?'
@@ -13,7 +20,7 @@ scrape = function (this_auid) {
                       'query=au-id(', this_auid, ')', '&',
                       'apiKey=', api_key, '&',
                       'count=200', '&',
-                      # 'date=2002-2017', '&',
+                      'date=1998-2018', '&',
                       'httpAccept=application/xml')
     
     raw = getURL(query_url)
@@ -22,6 +29,9 @@ scrape = function (this_auid) {
     
     entries = xml_find_all(xml, 'entry')
     
+    eids = entries %>%
+        xml_find_first('eid') %>%
+        xml_text()
     scopus_ids = entries %>% 
         xml_find_first('dc:identifier') %>%
         xml_text() %>%
@@ -40,6 +50,7 @@ scrape = function (this_auid) {
         xml_text()
     
     tibble(auid = this_auid, 
+           eid = eids,
            scopus_id = scopus_ids, 
            title = titles, 
            journal = journals, 
@@ -48,11 +59,12 @@ scrape = function (this_auid) {
            raw = raw)
 }
 
-papers_by_auid = authors$auid %>%
+papers_by_auid = authors$auids %>%
+    unlist() %>%
     unique() %>%
     plyr::ldply(scrape, 
                 .progress = 'text')
 
-save(papers_by_auid, file = '01_papers_by_auid.Rdata')
+save(authors, papers_by_auid, file = '01_authors_and_papers.Rdata')
 
 
