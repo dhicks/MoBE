@@ -8,9 +8,9 @@ library(LDAvis)
 library(jsonlite)
 
 
-setwd("/home/hugo/Projects/DSI/Eisen-data/")
+setwd("../../Eisen-data/")
 input_file <- "02_abstracts.json"
-output_model_json_path <- "/home/hugo/Projects/DSI/Eisen/topic_modeling/lda.json"
+output_model_json_path <- "03_lda.json"
 
 data <-fromJSON(input_file)
 
