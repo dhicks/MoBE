@@ -26,6 +26,8 @@ control_params <- list(stemming = TRUE, stopwords = TRUE,
 dtm <- DocumentTermMatrix(corp, control = control_params)
 lda = LDA(dtm, 5)
 
+save(lda, file = '03_lda.Rdata')
+
 # This function takes the topicmodels::LDA output, along with its tm::Corpus
 # and tm::DocumentTermMatrix, and extracts from them the JSON object that
 # LDAvis::serVis() expects.
