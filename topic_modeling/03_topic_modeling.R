@@ -24,15 +24,21 @@ control_params <- list(stemming = TRUE, stopwords = TRUE,
 		       minWordLength = 2, removeNumbers = TRUE,
 		       removePunctuation = TRUE)
 dtm <- DocumentTermMatrix(corp, control = control_params)
+
+# Change automatically generated integer ids for document scopus_ids,
+# so we can LDA results to document metadata as some later point.
+dtm$dimnames$Docs <- data$scopus_id[!is.na(data$abstract)]
+
+
 lda = LDA(dtm, 5)
 
 save(lda, file = '03_lda.Rdata')
 
-# This function takes the topicmodels::LDA output, along with its tm::Corpus
-# and tm::DocumentTermMatrix, and extracts from them the JSON object that
-# LDAvis::serVis() expects.
 topicmodels_json_ldavis <- function(fitted, corpus, doc_term){
-
+  # This function takes the topicmodels::LDA output, along with its tm::Corpus
+  # and tm::DocumentTermMatrix, and extracts from them the JSON object that
+  # LDAvis::serVis() expects.
+  
 	# Find required quantities
 	phi <- posterior(fitted)$terms %>% as.matrix
 	theta <- posterior(fitted)$topics %>% as.matrix
