@@ -14,7 +14,7 @@ terms_lda = lda@beta %>%
 documents_lda = lda@gamma %>% 
     as_tibble() %>%
     rename_all(funs(str_replace(., 'V', 'topic_'))) %>%
-    mutate(document = lda@documents) %>%
-    select(document, everything())
+    mutate(scopus_id = lda@documents) %>%
+    select(scopus_id, everything())
 
 save(terms_lda, documents_lda, file = '../../Eisen-data/04_lda_dfs.Rdata')
