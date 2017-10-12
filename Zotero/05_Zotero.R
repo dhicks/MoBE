@@ -1,11 +1,12 @@
 library(tidyverse)
 library(stringr)
 library(jsonlite)
+library(RCurl)
 
 ## https://www.zotero.org/groups/1658064/sloan_mobe_public
 group_url = 'https://api.zotero.org/groups/1658064/items'
 
-total_items = RCurl::getURL(str_c(group_url, '?', 
+total_items = getURL(str_c(group_url, '?', 
                                   'itemType=journalArticle'),
         .opts = list(header = TRUE)) %>%
     str_match('Total-Results: ([0-9]+)') %>%
@@ -27,4 +28,4 @@ for (i in 1:n_queries) {
     data = bind_rows(data, new_data)
 }
 
-write_csv(data, 'Eisen_zotero.csv')
+write_csv(data, '../../Eisen-data/05_zotero.csv')
