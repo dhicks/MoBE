@@ -30,22 +30,29 @@ dtm <- DocumentTermMatrix(corp, control = control_params)
 dtm$dimnames$Docs <- data$scopus_id[!is.na(data$abstract)]
 
 
-lda = LDA(dtm, 5)
+lda = LDA(dtm, 5, control = list(seed = 42, verbose = 10))
 
 save(lda, file = '03_lda.Rdata')
 
-
-
-## TODO
-## LDAvis::createJSON() raises an error for k=17
-## Apparently due to this problem:  https://github.com/cpsievert/LDAvis/issues/56#issuecomment-273444822
-
+## LDAvis::createJSON() raises an error for k=17 w/ default mds.method
+## Fix from https://github.com/cpsievert/LDAvis/issues/56#issuecomment-273444822
 
 topicmodels_json_ldavis <- function(fitted, corpus, doc_term){
   # This function takes the topicmodels::LDA output, along with its tm::Corpus
   # and tm::DocumentTermMatrix, and extracts from them the JSON object that
   # LDAvis::serVis() expects.
   
+    jsPCA_fixed = function (phi) {
+        jensenShannon <- function(x, y) {
+            m <- 0.5 * (x + y)
+            0.5 * sum(ifelse(x==0, 0, x * log(x/m))) + 
+                0.5 * sum(ifelse(y==0, 0, y * log(y/m)))
+        }
+        dist.mat <- proxy::dist(x = phi, method = jensenShannon)
+        pca.fit <- stats::cmdscale(dist.mat, k = 2)
+        data.frame(x = pca.fit[, 1], y = pca.fit[, 2])
+    }
+    
 	# Find required quantities
 	phi <- posterior(fitted)$terms %>% as.matrix
 	theta <- posterior(fitted)$topics %>% as.matrix
@@ -62,7 +69,8 @@ topicmodels_json_ldavis <- function(fitted, corpus, doc_term){
 	json_lda <- LDAvis::createJSON(phi = phi, theta = theta,
 				       vocab = vocab,
 				       doc.length = doc_length,
-				       term.frequency = freq_matrix$Freq)
+				       term.frequency = freq_matrix$Freq, 
+				       mds.method = jsPCA_fixed)
 
 	return(json_lda)
 }
