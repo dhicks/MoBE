@@ -34,6 +34,13 @@ lda = LDA(dtm, 5)
 
 save(lda, file = '03_lda.Rdata')
 
+
+
+## TODO
+## LDAvis::createJSON() raises an error for k=17
+## Apparently due to this problem:  https://github.com/cpsievert/LDAvis/issues/56#issuecomment-273444822
+
+
 topicmodels_json_ldavis <- function(fitted, corpus, doc_term){
   # This function takes the topicmodels::LDA output, along with its tm::Corpus
   # and tm::DocumentTermMatrix, and extracts from them the JSON object that
