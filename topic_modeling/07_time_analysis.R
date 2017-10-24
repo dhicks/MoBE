@@ -51,7 +51,7 @@ lg0 = function (x) {
 }
 lg0 = Vectorize(lg0)
 
-k = 5  # num. topics
+k = sum(grepl('topic', names(documents_lda)))  # num. topics
 max_H = -k * 1/k * lg0(1/k)  # entropy of a uniform distribution
 
 dataf = dataf %>%
@@ -65,7 +65,7 @@ dataf = dataf %>%
 ggplot(dataf, aes(year, delta_H, color = in_collab)) + 
     geom_point(alpha = .25, position = 'jitter') + 
     geom_smooth(method = 'loess') +
-    geom_hline(yintercept = max_H + (1:5) * 1/(1:5) * lg0(1/(1:5)), 
+    geom_hline(yintercept = max_H + (1:k) * 1/(1:k) * lg0(1/(1:k)), 
                linetype = 'dashed') +
     scale_color_brewer(palette = 'Set1')
 
@@ -92,10 +92,12 @@ ggplot(dataf, aes(year, delta_H, color = in_collab)) +
 #' 
 #+ fig.width = 12
 gamma_year_plot = dataf %>%
-    select(topic_1:topic_5, year, in_collab) %>%
+    select(starts_with('topic'), year, in_collab) %>%
     gather(topic, gamma, -year, -in_collab) %>%
-    ggplot(aes(year, gamma, color = topic, shape = topic)) + 
-    scale_color_brewer(palette = 'Set1')
+    ggplot(aes(year, gamma, color = topic, linetype = topic)) + 
+    # scale_color_brewer(palette = 'Set1')
+    scale_color_manual(values = rep_len(RColorBrewer::brewer.pal(5, 'Set1'), length.out = k)) +
+    scale_linetype_manual(values = rep_len(1:4, length.out = k))
 plot_grid(gamma_year_plot + geom_smooth(), 
           gamma_year_plot + stat_summary(geom = 'line', fun.y = 'median'))
 
@@ -131,7 +133,7 @@ dataf %>%
 dataf %>%
     unnest(author_ids) %>%
     rename(author_id = author_ids) %>%
-    select(topic_1:topic_5, year, author_id) %>%
+    select(starts_with('topic'), year, author_id) %>%
     gather(topic, gamma, -year, -author_id) %>%
     ggplot(aes(year, gamma, color = topic, shape = topic)) + 
     # geom_point() + 
@@ -139,7 +141,8 @@ dataf %>%
     # stat_summary(geom = 'line', fun.y = 'median') +
     geom_vline(xintercept = 2010) +
     facet_wrap(~ author_id) +
-    scale_color_brewer(palette = 'Set1')
+    # scale_color_brewer(palette = 'Set1')
+    scale_color_manual(values = rep_len(RColorBrewer::brewer.pal(5, 'Set1'), length.out = k))
 
 #' Each of the 24 authors was given an internal ID indicating whether they were "building" or "microbial."  By plotting topics over time for each author, we can get a sense of how topics are related to the two major research communities.  In this plot, the vertical line corresponds to the first publications by the collaboration in 2010.  
 #' 
@@ -165,7 +168,8 @@ plot_grid(gamma_year_plot + geom_smooth(method = 'loess') +
 #' This plot shows (top two panels) topic prevalence over time and (bottom panel) document counts, both within (TRUE, right) and outside (FALSE, left) the collaboration.  Within the collaboration, prevalence is noisy for the first few years, due to the small number of documents.  After 2013, topics 2, 3, and 5 are prominent in the collaboration, though 3 is increasingly prominent outside the collaboration as well.  
 #' 
 dataf %>%
-    select(starts_with('topic'), in_collab) %>%
+    select(topic_2, topic_4, topic_12, in_collab) %>%
+    mutate(combined = topic_2 + topic_4 + topic_12) %>%
     gather(topic, gamma, -in_collab) %>%
     ggplot(aes(in_collab, gamma)) +
     # geom_boxplot() +

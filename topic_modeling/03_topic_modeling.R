@@ -30,7 +30,8 @@ dtm <- DocumentTermMatrix(corp, control = control_params)
 dtm$dimnames$Docs <- data$scopus_id[!is.na(data$abstract)]
 
 
-lda = LDA(dtm, 5, control = list(seed = 42, verbose = 10))
+## 161/2681 papers (6%) are in the collaboration; so let's try 1/.06 ~ 17 topics
+lda = LDA(dtm, 17, control = list(seed = 42, verbose = 10))
 
 save(lda, file = '03_lda.Rdata')
 
