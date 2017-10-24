@@ -133,16 +133,20 @@ dataf %>%
 dataf %>%
     unnest(author_ids) %>%
     rename(author_id = author_ids) %>%
-    select(starts_with('topic'), year, author_id) %>%
-    gather(topic, gamma, -year, -author_id) %>%
-    ggplot(aes(year, gamma, color = topic, shape = topic)) + 
+    # select(starts_with('topic'), year, author_id) %>%
+    select(topic_2, topic_4, year, author_id, in_collab) %>%
+    # mutate(combined = topic_2 + topic_4 + topic_12) %>%
+    gather(topic, gamma, -year, -author_id, -in_collab) %>%
+    ggplot(aes(year, gamma, fill = interaction(topic, in_collab))) + 
     # geom_point() + 
-    geom_smooth() +
-    # stat_summary(geom = 'line', fun.y = 'median') +
+    # geom_smooth() +
+    stat_summary(geom = 'bar', fun.y = function(x) quantile(x, probs = .75), 
+                 position = 'stack') +
     geom_vline(xintercept = 2010) +
     facet_wrap(~ author_id) +
-    # scale_color_brewer(palette = 'Set1')
-    scale_color_manual(values = rep_len(RColorBrewer::brewer.pal(5, 'Set1'), length.out = k))
+    scale_color_brewer(palette = 'Set1') +
+    scale_fill_brewer(palette = 'Set1')
+    # scale_color_manual(values = rep_len(RColorBrewer::brewer.pal(5, 'Set1'), length.out = k))
 
 #' Each of the 24 authors was given an internal ID indicating whether they were "building" or "microbial."  By plotting topics over time for each author, we can get a sense of how topics are related to the two major research communities.  In this plot, the vertical line corresponds to the first publications by the collaboration in 2010.  
 #' 
