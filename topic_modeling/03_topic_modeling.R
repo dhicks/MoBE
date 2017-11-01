@@ -31,7 +31,7 @@ dtm$dimnames$Docs <- data$scopus_id[!is.na(data$abstract)]
 
 
 ## 161/2681 papers (6%) are in the collaboration; so let's try 1/.06 ~ 17 topics
-lda = LDA(dtm, 17, control = list(seed = 42, verbose = 10))
+lda = LDA(dtm, 10, control = list(seed = 42, verbose = 10))
 
 save(lda, file = '03_lda.Rdata')
 

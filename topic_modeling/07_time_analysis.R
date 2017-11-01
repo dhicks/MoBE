@@ -99,7 +99,7 @@ gamma_year_plot = dataf %>%
     scale_color_manual(values = rep_len(RColorBrewer::brewer.pal(5, 'Set1'), length.out = k)) +
     scale_linetype_manual(values = rep_len(1:4, length.out = k))
 plot_grid(gamma_year_plot + geom_smooth(), 
-          gamma_year_plot + stat_summary(geom = 'line', fun.y = 'median'))
+          gamma_year_plot + stat_summary(geom = 'line', fun.y = function(x) quantile(x, probs = .67)))
 
 #' This plot shows the prevalence of all 5 topics over time, using a GAM smoother (left) and median (right) on the $\gamma$ distributions for documents published in a given year.  We note that
 #' 
@@ -133,20 +133,20 @@ dataf %>%
 dataf %>%
     unnest(author_ids) %>%
     rename(author_id = author_ids) %>%
-    # select(starts_with('topic'), year, author_id) %>%
-    select(topic_2, topic_4, year, author_id, in_collab) %>%
+    select(starts_with('topic'), year, author_id, in_collab) %>%
+    # select(topic_2, topic_4, year, author_id, in_collab) %>%
     # mutate(combined = topic_2 + topic_4 + topic_12) %>%
     gather(topic, gamma, -year, -author_id, -in_collab) %>%
-    ggplot(aes(year, gamma, fill = interaction(topic, in_collab))) + 
+    ggplot(aes(year, gamma, fill = topic)) + 
     # geom_point() + 
     # geom_smooth() +
     stat_summary(geom = 'bar', fun.y = function(x) quantile(x, probs = .75), 
                  position = 'stack') +
     geom_vline(xintercept = 2010) +
     facet_wrap(~ author_id) +
-    scale_color_brewer(palette = 'Set1') +
-    scale_fill_brewer(palette = 'Set1')
-    # scale_color_manual(values = rep_len(RColorBrewer::brewer.pal(5, 'Set1'), length.out = k))
+    # scale_color_brewer(palette = 'Set1') +
+    # scale_fill_brewer(palette = 'Set1')
+    scale_fill_manual(values = rep_len(RColorBrewer::brewer.pal(5, 'Set1'), length.out = k))
 
 #' Each of the 24 authors was given an internal ID indicating whether they were "building" or "microbial."  By plotting topics over time for each author, we can get a sense of how topics are related to the two major research communities.  In this plot, the vertical line corresponds to the first publications by the collaboration in 2010.  
 #' 
@@ -160,7 +160,7 @@ dataf %>%
 #+ fig.width = 10, fig.height = 10
 plot_grid(gamma_year_plot + geom_smooth(method = 'loess') + 
               facet_grid(~ in_collab) + coord_cartesian(xlim = c(2007, 2018), ylim = c(0, .5)), 
-          gamma_year_plot + stat_summary(geom = 'line', fun.y = 'median') +
+          gamma_year_plot + stat_summary(geom = 'line', fun.y = function (x) quantile(x, probs = .67)) +
               facet_grid(~ in_collab) + coord_cartesian(xlim = c(2007, 2018), ylim = c(0, .5)), 
           ggplot(dataf, aes(year)) + 
               geom_bar() + 
@@ -172,8 +172,7 @@ plot_grid(gamma_year_plot + geom_smooth(method = 'loess') +
 #' This plot shows (top two panels) topic prevalence over time and (bottom panel) document counts, both within (TRUE, right) and outside (FALSE, left) the collaboration.  Within the collaboration, prevalence is noisy for the first few years, due to the small number of documents.  After 2013, topics 2, 3, and 5 are prominent in the collaboration, though 3 is increasingly prominent outside the collaboration as well.  
 #' 
 dataf %>%
-    select(topic_2, topic_4, topic_12, in_collab) %>%
-    mutate(combined = topic_2 + topic_4 + topic_12) %>%
+    select(starts_with('topic'), in_collab) %>%
     gather(topic, gamma, -in_collab) %>%
     ggplot(aes(in_collab, gamma)) +
     # geom_boxplot() +
