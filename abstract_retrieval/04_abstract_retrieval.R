@@ -10,17 +10,25 @@ source('api_key.R')
 
 load('../../Eisen-data/03_authors_and_papers.Rdata')
 
+## Identify papers to retrieve
+papers_to_retrieve = papers_by_auid %>%
+    filter(!is.na(scopus_id)) %>%
+    .$scopus_id %>%
+    unique()
+# this_paper = papers_to_retrieve[10000]
+# get_metadata(this_paper, target_folder)
+
+
 ## Folder to store XML retrieved from API
 target_folder = '../../Eisen-data/04-abstracts'
 if (!dir.exists(target_folder)) {
     dir.create(target_folder)
 }
 
-
-## Functions used in the metadata retrieval process
+## Functions for scraping from API
 scrape_ = function (this_sid) {
     ## Basically just an abstraction of the RCurl call
-    base_url = 'https://api.elsevier.com/content/abstract/scopus_id/'
+    base_url = 'http://api.elsevier.com/content/abstract/scopus_id/'
     query_url = str_c(base_url, 
                       this_sid, '?',
                       'apiKey=', api_key)
@@ -30,7 +38,7 @@ scrape_ = function (this_sid) {
 }
 
 scrape = function (this_sid, target_folder) {
-    ## Either scrape from the API + save the result OR load the saved result
+    ## Either scrape from the API + save the result OR pass
     target_file_xml = str_c(target_folder, '/', this_sid, '.xml')
     target_file = str_c(target_folder, '/', this_sid, '.xml.zip')
     if (!file.exists(target_file)) {
@@ -38,12 +46,31 @@ scrape = function (this_sid, target_folder) {
         write_file(raw, target_file_xml)
         zip(target_file, target_file_xml, flags = '-9Xq')
         unlink(target_file_xml)
+        return(TRUE)
     } else {
-        raw = read_file(target_file)
+        return(TRUE)
     }
-    return(raw)
 }
 
+## Scrape from API
+cl = makeCluster(2)
+registerDoSNOW(cl)
+pb = txtProgressBar(max = length(papers_to_retrieve), style = 3)
+progress = function(n) setTxtProgressBar(pb, n)
+# system.time(
+success <- foreach(paper = papers_to_retrieve, 
+                        .combine = c, 
+                        .multicombine = TRUE, 
+                        .packages = c('tidyverse', 'RCurl', 'stringr'),
+                        .options.snow = list(progress = progress),
+                        .verbose = FALSE) %dopar%
+    scrape(paper, target_folder)
+# )
+stopCluster(cl)
+
+
+
+## Parser
 parse = function (raw) {
     xml = read_xml(raw)
     xml = xml_ns_strip(xml)
@@ -92,34 +119,25 @@ parse = function (raw) {
            auids)
 }
 
-get_metadata = function (this_sid, target_folder) {
-    raw = scrape(this_sid, target_folder)
-    dataf = parse(raw)
-    
-    return(dataf)
-}
-
-
-## Identify papers to retrieve
-papers_to_retrieve = unique(papers_by_auid$scopus_id)
-# papers_to_retrieve = papers_to_retrieve[1:200]
-  
-
-## Run metadata retrieval
+xml_to_parse = str_subset(dir(target_folder), '.xml.zip')
 cl = makeCluster(2)
 registerDoSNOW(cl)
 pb = txtProgressBar(max = length(papers_to_retrieve), style = 3)
 progress = function(n) setTxtProgressBar(pb, n)
 system.time(
-abstracts_df <- foreach(paper = papers_to_retrieve, 
-        .combine = bind_rows, 
-        .multicombine = TRUE, 
-        .packages = c('tidyverse', 'RCurl', 'xml2', 'stringr'),
-        .options.snow = list(progress = progress),
-        .verbose = FALSE) %dopar%
-    get_metadata(paper, target_folder)
+abstracts_df <- foreach(xml_file = xml_to_parse, 
+                       .combine = bind_rows, 
+                       .multicombine = TRUE, 
+                       .packages = c('tidyverse', 'xml2', 'stringr'),
+                       .options.snow = list(progress = progress),
+                       .verbose = FALSE) %dopar% {
+                           full_path = str_c(target_folder, '/', xml_file)
+                           raw = read_file(full_path)
+                           parse(raw)
+                       }
 )
 stopCluster(cl)
+
 
 
 ## Filter down to auids in our list of authors
@@ -133,9 +151,8 @@ abstracts_df = abstracts_df %>%
 
 
 ## Save results
-save(abstracts_df, file = '04_abstracts.Rdata')
+save(abstracts_df, file = '../../Eisen-data/04_abstracts.Rdata')
 
 abstracts_df %>%
-    select(-raw) %>%
     jsonlite::toJSON() %>%
-    write_lines('04_abstracts.json')
+    write_lines('../../Eisen-data/04_abstracts.json')
