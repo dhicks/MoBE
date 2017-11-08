@@ -28,4 +28,4 @@ for (i in 1:n_queries) {
     data = bind_rows(data, new_data)
 }
 
-write_csv(data, '../../Eisen-data/05_zotero.csv')
+write_csv(data, '../../Eisen-data/01_zotero.csv')
