@@ -9,8 +9,8 @@ library(jsonlite)
 
 
 target_folder <- "../../Eisen-data/"
-input_file <- paste0(target_folder, "02_abstracts.json")
-output_model_json_path <- paste0(target_folder, "03_lda.json")
+input_file <- paste0(target_folder, "04_abstracts.json")
+output_model_json_path <- paste0(target_folder, "05_lda.json")
 
 data <-fromJSON(input_file)
 
@@ -30,7 +30,7 @@ dtm <- DocumentTermMatrix(corp, control = control_params)
 dtm$dimnames$Docs <- data$scopus_id[!is.na(data$abstract)]
 
 
-lda = LDA(dtm, 2, control = list(seed = 42, verbose = 10))
+lda = LDA(dtm, 2, control = list(seed = 42, verbose = 1))
 
 save(lda, file = '03_lda.Rdata')
 
