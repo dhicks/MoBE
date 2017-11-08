@@ -1,7 +1,7 @@
 library(tidyverse)
 library(stringr)
 
-load('../../Eisen-data/03_lda.Rdata')
+load('../../Eisen-data/05_lda.Rdata')
 
 terms_lda = lda@beta %>%
     t() %>%
@@ -17,4 +17,4 @@ documents_lda = lda@gamma %>%
     mutate(scopus_id = lda@documents) %>%
     select(scopus_id, everything())
 
-save(terms_lda, documents_lda, file = '../../Eisen-data/04_lda_dfs.Rdata')
+save(terms_lda, documents_lda, file = '../../Eisen-data/06_lda_dfs.Rdata')

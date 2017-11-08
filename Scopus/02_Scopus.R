@@ -6,7 +6,7 @@ library(xml2)
 
 source('api_key.R')
 
-dataf = read_csv('../../Eisen-data/05_Zotero.csv')
+dataf = read_csv('../../Eisen-data/01_Zotero.csv')
 
 # this_doi = dataf$DOI[[1]]
 
@@ -87,4 +87,4 @@ for (this_doi in dataf$DOI) {
     scopus_data = bind_rows(scopus_data, new_data)
 }
 
-save(scopus_data, file = '../../Eisen-data/06_Scopus.Rdata')
+save(scopus_data, file = '../../Eisen-data/02_Scopus.Rdata')

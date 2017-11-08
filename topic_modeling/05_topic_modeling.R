@@ -30,9 +30,9 @@ dtm <- DocumentTermMatrix(corp, control = control_params)
 dtm$dimnames$Docs <- data$scopus_id[!is.na(data$abstract)]
 
 
-lda = LDA(dtm, 2, control = list(seed = 42, verbose = 1))
+lda = LDA(dtm, 2, control = list(seed = 42, verbose = 5))
 
-save(lda, file = '03_lda.Rdata')
+save(lda, file = paste0(target_folder, '05_lda.Rdata'))
 
 ## LDAvis::createJSON() raises an error for k=17 w/ default mds.method
 ## Fix from https://github.com/cpsievert/LDAvis/issues/56#issuecomment-273444822
