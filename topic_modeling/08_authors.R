@@ -57,13 +57,35 @@ ggplot(authors_df, aes(H)) + geom_density() + geom_rug()
 
 ## Docs w/ more than 2 authors (in the dataset)
 edges = docs_df %>%
-    select(scopus_id, topic_1, doi, year, in_collab, 
+    select(scopus_id, H, starts_with('topic'), 
+           doi, year, in_collab, 
            auids) %>%
     unnest() %>%
-    full_join(., ., by = c('scopus_id', 'topic_1', 'doi', 'year', 
-                           'in_collab')) %>%
+    ## Make pairs by joining on everything other than auids
+    full_join(., ., 
+              by = names(.)[!(names(.) %in% 'auids')]) %>%
     filter(auids.x < auids.y) %>%
-    select(auids.x, auids.y, everything())
+    ## Put the auids on the left side of the df and rename
+    select(auid.x = auids.x, auid.y = auids.y, everything()) %>%
+    ## Rename paper topics to avoid collisions
+    rename_at(vars(H, starts_with('topic')), 
+              funs(str_c(., '_paper'))) %>%
+    ## Add the author topic distributions
+    left_join(authors_df, by = c('auid.x' = 'auids')) %>%
+    rename_at(vars(matches('H$|topic_[0-9]+$')), 
+              funs(str_c(., '.x'))) %>%
+    # NEXT: add and rename author topic dists for author 2
+    # THEN: Hellinger distance https://en.wikipedia.org/wiki/Hellinger_distance#Discrete_distributions
+    
+    
+    select(-topic_2) %>%
+    rename(topic_1.paper = topic_1.x, 
+           topic_1.auth1 = topic_1.y) %>%
+    left_join(authors_df, by = c('auid.y' = 'auids')) %>%
+    select(-topic_2) %>%
+    rename(topic_1.auth2 = topic_1) %>%
+    ## Difference in the author topic distributions
+    mutate(topic_1.diff = abs(topic_1.auth1 - topic_1.auth2))
 
 ## Build network
 library(igraph)
