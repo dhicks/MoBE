@@ -51,6 +51,7 @@ authors_df = authors_df %>%
     summarize(H = -sum(gamma * lg0(gamma))) %>%
     left_join(authors_df)
 
+
 ## Means for the 2-topic model do a poor job of separating the two groups of authors
 ggplot(authors_df, aes(H)) + geom_density() + geom_rug()
 
@@ -67,25 +68,32 @@ edges = docs_df %>%
     filter(auids.x < auids.y) %>%
     ## Put the auids on the left side of the df and rename
     select(auid.x = auids.x, auid.y = auids.y, everything()) %>%
-    ## Rename paper topics to avoid collisions
-    rename_at(vars(H, starts_with('topic')), 
-              funs(str_c(., '_paper'))) %>%
-    ## Add the author topic distributions
-    left_join(authors_df, by = c('auid.x' = 'auids')) %>%
-    rename_at(vars(matches('H$|topic_[0-9]+$')), 
-              funs(str_c(., '.x'))) %>%
-    # NEXT: add and rename author topic dists for author 2
-    # THEN: Hellinger distance https://en.wikipedia.org/wiki/Hellinger_distance#Discrete_distributions
+    ## Join w/ author topic distributions
+    left_join(authors_df, by = c('auid.x' = 'auids'), 
+              suffix = c('', '.x')) %>%
+    left_join(authors_df, by = c('auid.y' = 'auids'),
+              suffix = c('.paper', '.y'))
     
-    
-    select(-topic_2) %>%
-    rename(topic_1.paper = topic_1.x, 
-           topic_1.auth1 = topic_1.y) %>%
-    left_join(authors_df, by = c('auid.y' = 'auids')) %>%
-    select(-topic_2) %>%
-    rename(topic_1.auth2 = topic_1) %>%
-    ## Difference in the author topic distributions
-    mutate(topic_1.diff = abs(topic_1.auth1 - topic_1.auth2))
+## Hellinger distance https://en.wikipedia.org/wiki/Hellinger_distance#Discrete_distributions
+## h^2(p, q) = 1 - sum sqrt(p_i * q_i)
+authors_hellinger = edges %>%
+    ## Work w/ just auids and topics
+    select(auid.x, auid.y, matches('topic_[0-9]+\\.[xy]')) %>%
+    filter(!duplicated(.)) %>%
+    ## Reshape to align corresponding topics
+    gather(topic.x, gamma.x, matches('topic_[0-9]+\\.x')) %>%
+    gather(topic.y, gamma.y, matches('topic_[0-9]+\\.y')) %>%
+    mutate_at(vars(starts_with('topic')), 
+              funs(str_extract(., '[0-9]+'))) %>%
+    filter(topic.x == topic.y) %>%
+    ## Calculate Hellinger distance
+    mutate(sqrt_pq = sqrt(gamma.x * gamma.y)) %>%
+    group_by(auid.x, auid.y) %>%
+    summarize(h_sqr = 1 - sum(sqrt_pq)) %>%
+    ungroup() %>%
+    mutate(h_authors = sqrt(h_sqr))
+
+edges = left_join(edges, authors_hellinger)
 
 ## Build network
 library(igraph)
@@ -109,14 +117,7 @@ ggraph(net) +
 
 edges %>%
     mutate(post2010 = ifelse(year >= 2010, '≥2010', '<2010')) %>%
-    # group_by(post2010, in_collab) %>%
-    # summarize(n = n(),
-    #           median = median(topic_1.diff), 
-    #           eightyth = quantile(topic_1.diff, probs = .8), 
-    #           crosses = 1 - ecdf(topic_1.diff)(.5))
-    ggplot(aes(topic_1.diff)) + 
+    ggplot(aes(h_authors)) + 
     geom_density() +
     geom_rug() +
-    facet_grid( ~ in_collab)
-    
-ggplot(edges, aes(scopus_id, topic_1.diff)) + geom_point()
+    facet_grid(post2010 ~ in_collab)
