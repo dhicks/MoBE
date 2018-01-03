@@ -29,8 +29,11 @@ dtm <- DocumentTermMatrix(corp, control = control_params)
 # so we can LDA results to document metadata as some later point.
 dtm$dimnames$Docs <- data$scopus_id[!is.na(data$abstract)]
 
-
-lda = LDA(dtm, 2, control = list(seed = 42, verbose = 5))
+# TODO: try small values of alpha
+lda = LDA(dtm, 2, control = list(seed = 42, verbose = 5, 
+                                 alpha = 10^-12, 
+                                 estimate.alpha = FALSE))
+hist(lda@gamma[,1])
 
 save(lda, file = paste0(target_folder, '05_lda.Rdata'))
 

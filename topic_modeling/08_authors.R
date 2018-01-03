@@ -30,17 +30,22 @@ docs_df = left_join(documents_lda, abstracts_df) %>%
     mutate(date = ymd(date),
            year = year(date))
 
+## Num. topics
+k = sum(str_detect(names(docs_df), 'topic_'))
 
 ## Distribution of document-wise entropy
 ## The 2-topic model does an okay job of classifying papers outside the collaboration, but doesn't cleanly classify papers inside the collaboration
 ggplot(docs_df, aes(H, fill = in_collab)) + 
-    geom_density(alpha = .5)
+    geom_density(alpha = .5) +
+    geom_rug() +
+    geom_vline(xintercept = lg0(k))
 
 
 ## Reshape into author-level info
 authors_df = docs_df %>%
     select(-keywords) %>%
     unnest() %>% 
+    filter(in_collab) %>%
     group_by(auids) %>%
     summarize_at(vars(starts_with('topic')), mean) %>%
     ungroup()
@@ -51,9 +56,12 @@ authors_df = authors_df %>%
     summarize(H = -sum(gamma * lg0(gamma))) %>%
     left_join(authors_df)
 
+## Authors who only show up in the collaboration
+in_collab_only = setdiff(unlist(docs_df$auids), authors_df$auids)
+
 
 ## Means for the 2-topic model do a poor job of separating the two groups of authors
-ggplot(authors_df, aes(H)) + geom_density() + geom_rug()
+ggplot(authors_df, aes(H)) + geom_density() + geom_rug() + geom_vline(xintercept = lg0(k))
 
 
 ## Docs w/ more than 2 authors (in the dataset)
@@ -62,6 +70,7 @@ edges = docs_df %>%
            doi, year, in_collab, 
            auids) %>%
     unnest() %>%
+    filter(!(auids %in% in_collab_only)) %>%
     ## Make pairs by joining on everything other than auids
     full_join(., ., 
               by = names(.)[!(names(.) %in% 'auids')]) %>%
@@ -95,29 +104,65 @@ authors_hellinger = edges %>%
 
 edges = left_join(edges, authors_hellinger)
 
+## Distribution of Hellinger distance between authors
+edges %>%
+    mutate(post2010 = ifelse(year >= 2010, '≥2010', '<2010')) %>%
+    ggplot(aes(h_authors, color = in_collab)) + 
+    geom_density() 
+    # geom_rug() +
+    # facet_grid( ~ in_collab)
+
+edges %>%
+    group_by(in_collab) %>%
+    summarize_at(vars(h_authors), funs(mean, median))
+
+## Paper entropy vs. Hellinger distance between authors
+ggplot(edges, aes(H.paper, h_authors)) + 
+    geom_point() +
+    geom_smooth() +
+    facet_wrap(~ in_collab)
+
+
 ## Build network
 library(igraph)
 library(ggraph)
 net = graph_from_data_frame(edges, directed = FALSE, 
                             vertices = authors_df)
 
-net_simp = simplify(net)
+# net_simp = simplify(net)
 
 ## Plot
 set.seed(123)
 ggraph(net) +
     # geom_node_label(aes(label = surnames, fill = topic_1),
     #                 color = 'white') +
-    geom_node_point(aes(color = topic_1)) +
-    geom_edge_fan(aes(color = topic_1.paper), alpha = .5, 
+    geom_node_point(aes(color = topic_1), alpha = .1) +
+    scale_color_gradient(low = 'red', high = 'blue') +
+    geom_edge_fan(aes(color = topic_1.paper, alpha = h_authors),
                   spread = 4) +
-    facet_wrap(~ in_collab) +
+    scale_edge_color_gradient(low = 'red', high = 'blue') +
+    scale_edge_alpha_continuous(range = c(0, 1), trans = 'exp') +
+    facet_edges(~ in_collab) +
     theme_graph(foreground = 'black', strip_text_colour = 'white')
 
+## Comparison of the in-collaboration and out-of-collaboration networks
+net_incollab = subgraph.edges(net, E(net)[E(net)$in_collab])
+net_outcollab = subgraph.edges(net, E(net)[!E(net)$in_collab])
 
-edges %>%
-    mutate(post2010 = ifelse(year >= 2010, '≥2010', '<2010')) %>%
-    ggplot(aes(h_authors)) + 
-    geom_density() +
-    geom_rug() +
-    facet_grid(post2010 ~ in_collab)
+## Giant component of 'In' is larger
+components(net_incollab)$csize
+components(net_outcollab)$csize
+
+## 'In' has a smaller diameter
+diameter(net_incollab)
+diameter(net_outcollab)
+
+## 'In' has a shorter average path length
+mean_distance(net_incollab)
+mean_distance(net_outcollab)
+
+## 'In' has a greater transitivity
+transitivity(net_incollab)
+transitivity(net_outcollab)
+
+

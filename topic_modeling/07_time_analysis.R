@@ -17,11 +17,9 @@ library(tidyverse)
 library(cowplot)
 library(lubridate)
 
-load('../../Eisen-data/02_abstracts.Rdata')
-abstracts_df = abstracts_df %>%
-    select(-raw)
-load('../../Eisen-data/04_lda_dfs.Rdata')
-load('../../Eisen-data/06_Scopus.Rdata')
+load('../../Eisen-data/04_abstracts.Rdata')
+load('../../Eisen-data/06_lda_dfs.Rdata')
+load('../../Eisen-data/02_Scopus.Rdata')
 abstracts_df = abstracts_df %>%
     mutate(in_collab = scopus_id %in% scopus_data$sid)
 rm(scopus_data)
@@ -51,7 +49,7 @@ lg0 = function (x) {
 }
 lg0 = Vectorize(lg0)
 
-k = 2  # num. topics
+k = 4  # num. topics
 max_H = -k * 1/k * lg0(1/k)  # entropy of a uniform distribution
 
 dataf = dataf %>%
@@ -62,10 +60,10 @@ dataf = dataf %>%
               delta_H = max_H - H) %>%
     left_join(dataf)
 
-ggplot(dataf, aes(year, delta_H, color = in_collab)) + 
+ggplot(dataf, aes(year, H, color = in_collab)) + 
     geom_point(alpha = .25, position = 'jitter') + 
-    geom_smooth(method = 'loess') +
-    geom_hline(yintercept = max_H + (1:k) * 1/(1:k) * lg0(1/(1:k)), 
+    geom_smooth() +
+    geom_hline(yintercept = max_H, 
                linetype = 'dashed') +
     scale_color_brewer(palette = 'Set1')
 
@@ -128,18 +126,18 @@ dataf %>%
 
 #+ warning = FALSE, fig.width = 12, fig.height = 7
 ## Topics over year, faceted by author
-dataf %>%
-    unnest(author_ids) %>%
-    rename(author_id = author_ids) %>%
-    select(starts_with('topic'), year, author_id) %>%
-    gather(topic, gamma, -year, -author_id) %>%
-    ggplot(aes(year, gamma, color = topic, shape = topic)) + 
-    # geom_point() + 
-    geom_smooth() +
-    # stat_summary(geom = 'line', fun.y = 'median') +
-    geom_vline(xintercept = 2010) +
-    facet_wrap(~ author_id) +
-    scale_color_brewer(palette = 'Set1')
+# dataf %>%
+#     unnest(auids) %>%
+#     rename(author_id = auids) %>%
+#     select(starts_with('topic'), year, author_id) %>%
+#     gather(topic, gamma, -year, -author_id) %>%
+#     ggplot(aes(year, gamma, color = topic, shape = topic)) + 
+#     # geom_point() + 
+#     geom_smooth() +
+#     # stat_summary(geom = 'line', fun.y = 'median') +
+#     geom_vline(xintercept = 2010) +
+#     facet_wrap(~ author_id) +
+#     scale_color_brewer(palette = 'Set1')
 
 #' Each of the 24 authors was given an internal ID indicating whether they were "building" or "microbial."  By plotting topics over time for each author, we can get a sense of how topics are related to the two major research communities.  In this plot, the vertical line corresponds to the first publications by the collaboration in 2010.  
 #' 
