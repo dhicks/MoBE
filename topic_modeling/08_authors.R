@@ -2,14 +2,6 @@ library(tidyverse)
 library(cowplot)
 library(lubridate)
 
-load('../../Eisen-data/04_abstracts.Rdata')
-load('../../Eisen-data/06_lda_dfs.Rdata')
-load('../../Eisen-data/02_Scopus.Rdata')
-abstracts_df = abstracts_df %>%
-    mutate(in_collab = scopus_id %in% scopus_data$sid)
-rm(scopus_data)
-
-## Document-wise entropy
 ## Base-2 log, with log 0 = 0 for convenience
 lg0 = function (x) {
     if (x > 0) {
@@ -19,58 +11,50 @@ lg0 = function (x) {
     }
 }
 lg0 = Vectorize(lg0)
-documents_lda = documents_lda %>%
-    gather(topic, gamma, -scopus_id) %>%
-    group_by(scopus_id) %>%
+
+
+## Document metadata
+load('../../Eisen-data/02_Scopus.Rdata')
+load('../../Eisen-data/04_abstracts.Rdata')
+abstracts_df = abstracts_df %>%
+    select(-keywords, -abstract) %>%
+    mutate(in_collab = scopus_id %in% scopus_data$sid)
+abstracts_df$date = ymd(abstracts_df$date)
+abstracts_df$year = year(abstracts_df$date)
+rm(scopus_data)
+
+## LDA output
+lda = read_csv('../../Eisen-data/05-lda.csv') %>%
+    mutate(auid = as.character(auid), 
+           group_est = ifelse(topic_2 < .5, 'microbial', 'building'))
+## Author-level entropy
+lda = lda %>%
+    gather(topic, gamma, topic_0:topic_2) %>%
+    group_by(auid) %>%
     summarize(H = -sum(gamma * lg0(gamma))) %>%
-    left_join(documents_lda)
+    left_join(lda)
 
-## Combine LDA output with metadata
-docs_df = left_join(documents_lda, abstracts_df) %>%
-    mutate(date = ymd(date),
-           year = year(date))
+## --------------------
+## Exploring LDA output
+ggplot(lda, aes(topic_0, topic_1, fill = group)) + 
+    geom_point(shape = 21, color = 'black', size = 4, stroke = 1, 
+        aes(alpha = !is.na(group))) +
+    scale_fill_brewer(palette = 'Set1', na.value = 'yellow') +
+    scale_alpha_discrete(range = c(.2, 1), guide = FALSE) +
+    stat_function(fun = function (x) .5 - x, color = 'black', xlim = c(0, .5))
 
-## Num. topics
-k = sum(str_detect(names(docs_df), 'topic_'))
+lda %>%
+    ggplot(aes(group, topic_2)) + 
+    geom_jitter(width = .1) + 
+    geom_hline(aes(yintercept = .5), linetype = 'dashed')
 
-## Distribution of document-wise entropy
-## The 2-topic model does an okay job of classifying papers outside the collaboration, but doesn't cleanly classify papers inside the collaboration
-ggplot(docs_df, aes(H, fill = in_collab)) + 
-    geom_density(alpha = .5) +
-    geom_rug() +
-    geom_vline(xintercept = lg0(k))
-
-
-## Reshape into author-level info
-authors_df = docs_df %>%
-    select(-keywords) %>%
-    unnest() %>% 
-    filter(in_collab) %>%
-    group_by(auids) %>%
-    summarize_at(vars(starts_with('topic')), mean) %>%
-    ungroup()
-## Author-wise entropy
-authors_df = authors_df %>%
-    gather(topic, gamma, -auids) %>%
-    group_by(auids) %>%
-    summarize(H = -sum(gamma * lg0(gamma))) %>%
-    left_join(authors_df)
-
-## Authors who only show up in the collaboration
-in_collab_only = setdiff(unlist(docs_df$auids), authors_df$auids)
+ggplot(lda, aes(H, color = group)) + geom_density() + geom_rug()
 
 
-## Means for the 2-topic model do a poor job of separating the two groups of authors
-ggplot(authors_df, aes(H)) + geom_density() + geom_rug() + geom_vline(xintercept = lg0(k))
-
-
-## Docs w/ more than 2 authors (in the dataset)
-edges = docs_df %>%
-    select(scopus_id, H, starts_with('topic'), 
-           doi, year, in_collab, 
-           auids) %>%
+## ------------------
+## Edges: docs w/ more than 2 authors in the dataset
+edges = abstracts_df %>%
     unnest() %>%
-    filter(!(auids %in% in_collab_only)) %>%
     ## Make pairs by joining on everything other than auids
     full_join(., ., 
               by = names(.)[!(names(.) %in% 'auids')]) %>%
@@ -78,10 +62,13 @@ edges = docs_df %>%
     ## Put the auids on the left side of the df and rename
     select(auid.x = auids.x, auid.y = auids.y, everything()) %>%
     ## Join w/ author topic distributions
-    left_join(authors_df, by = c('auid.x' = 'auids'), 
+    left_join(lda, by = c('auid.x' = 'auid'), 
               suffix = c('', '.x')) %>%
-    left_join(authors_df, by = c('auid.y' = 'auids'),
-              suffix = c('.paper', '.y'))
+    left_join(lda, by = c('auid.y' = 'auid'),
+              suffix = c('.x', '.y')) %>%
+    ## Distance wrt topic 2
+    mutate(topic_2_dist = abs(topic_2.x - topic_2.y)) %>%
+    ungroup()
     
 ## Hellinger distance https://en.wikipedia.org/wiki/Hellinger_distance#Discrete_distributions
 ## h^2(p, q) = 1 - sum sqrt(p_i * q_i)
@@ -106,42 +93,42 @@ edges = left_join(edges, authors_hellinger)
 
 ## Distribution of Hellinger distance between authors
 edges %>%
-    mutate(post2010 = ifelse(year >= 2010, '≥2010', '<2010')) %>%
+    # mutate(post2010 = ifelse(year >= 2010, '≥2010', '<2010')) %>%
     ggplot(aes(h_authors, color = in_collab)) + 
-    geom_density() 
-    # geom_rug() +
-    # facet_grid( ~ in_collab)
+    geom_density() +
+    geom_rug() +
+    scale_x_continuous(trans = 'identity')
+    # facet_grid( ~ post2010)
+
+## Distribution of topic_2 distances
+ggplot(edges, aes(topic_2_dist, color = in_collab)) + 
+    geom_density() +
+    geom_rug() +
+    scale_x_continuous(trans = 'identity')
 
 edges %>%
     group_by(in_collab) %>%
-    summarize_at(vars(h_authors), funs(mean, median))
-
-## Paper entropy vs. Hellinger distance between authors
-ggplot(edges, aes(H.paper, h_authors)) + 
-    geom_point() +
-    geom_smooth() +
-    facet_wrap(~ in_collab)
+    summarize_at(vars(h_authors, topic_2_dist), funs(mean, median))
 
 
+## --------------------
 ## Build network
 library(igraph)
 library(ggraph)
 net = graph_from_data_frame(edges, directed = FALSE, 
-                            vertices = authors_df)
+                            vertices = lda)
 
 # net_simp = simplify(net)
 
 ## Plot
 set.seed(123)
 ggraph(net) +
-    # geom_node_label(aes(label = surnames, fill = topic_1),
-    #                 color = 'white') +
-    geom_node_point(aes(color = topic_1), alpha = .1) +
-    scale_color_gradient(low = 'red', high = 'blue') +
-    geom_edge_fan(aes(color = topic_1.paper, alpha = h_authors),
-                  spread = 4) +
-    scale_edge_color_gradient(low = 'red', high = 'blue') +
-    scale_edge_alpha_continuous(range = c(0, 1), trans = 'exp') +
+    geom_node_point(aes(color = topic_2), alpha = 1) +
+    # scale_color_brewer(palette = 'Set1') +
+    scale_color_gradient(low = 'blue', high = 'red') +
+    geom_edge_fan(aes(alpha = topic_2_dist), spread = 4) +
+    # scale_edge_color_gradient(low = 'red', high = 'blue') +
+    scale_edge_alpha_continuous(range = c(0, .7), trans = 'atanh') +
     facet_edges(~ in_collab) +
     theme_graph(foreground = 'black', strip_text_colour = 'white')
 
