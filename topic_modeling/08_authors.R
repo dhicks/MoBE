@@ -158,24 +158,31 @@ nets_over_time = map2(nets, names(nets),
 # plot_grid(plotlist = nets_over_time, ncol = 2)
 
 
-## Comparison of the in-collaboration and out-of-collaboration networks
-net_incollab = subgraph.edges(net, E(net)[E(net)$in_collab])
-net_outcollab = subgraph.edges(net, E(net)[!E(net)$in_collab])
+## Calculate network statistics over time
+net_by_year = cross_df(list(year = unique(E(net)$year), 
+                            in_collab = c(TRUE, FALSE))) %>%
+    mutate(net = map2(year, in_collab, ~ subgraph.edges(net, which((E(net)$year == .x) & (E(net)$in_collab == .y))))) %>%
+    mutate(size = unlist(map(net, ~ length(V(.x))))) %>%
+    filter(size > 0)
+net_by_year = net_by_year$net %>%
+    map_dfr(~ tibble(n_comp = components(.x)$no,
+                     gc = {components(.x)$csize %>% {./sum(.)} %>% {.[which(. == max(.))]}}, 
+                     H = {components(.x)$csize %>% {./sum(.)} %>% {-sum(. * log2(.))}},
+                     # mean_distance = mean_distance(.x), 
+                     # diameter = diameter(.x), 
+                     transitivity = transitivity(.x)
+                     # density = length(E(.x)) / (length(V(.x))*(length(V(.x))-1)/2) 
+    )) %>%
+    bind_cols(net_by_year, .) %>%
+    # mutate_at(vars(gc, mean_distance, diameter), funs(. / size)) %>%
+    # mutate(diameter = log10(diameter)) %>%
+    select(-net)
 
-## Giant component of 'In' is larger
-components(net_incollab)$csize
-components(net_outcollab)$csize
-
-## 'In' has a smaller diameter
-diameter(net_incollab)
-diameter(net_outcollab)
-
-## 'In' has a shorter average path length
-mean_distance(net_incollab)
-mean_distance(net_outcollab)
-
-## 'In' has a greater transitivity
-transitivity(net_incollab)
-transitivity(net_outcollab)
-
+net_by_year %>%
+    gather(statistic, value, -year, -in_collab) %>%
+    ggplot(aes(year, value, color = in_collab)) + 
+    geom_line() +
+    geom_hline(yintercept = 0, linetype = 'dashed') +
+    # scale_y_log10() +
+    facet_grid(statistic ~ ., scales = 'free')
 
