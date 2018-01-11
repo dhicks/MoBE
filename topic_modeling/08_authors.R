@@ -68,7 +68,9 @@ edges = abstracts_df %>%
               suffix = c('.x', '.y')) %>%
     ## Distance wrt topic 2
     mutate(topic_2_dist = abs(topic_2.x - topic_2.y)) %>%
-    ungroup()
+    ungroup() %>%
+    ## Bundle years
+    mutate(year_g = cut(year, 3))
     
 ## Hellinger distance https://en.wikipedia.org/wiki/Hellinger_distance#Discrete_distributions
 ## h^2(p, q) = 1 - sum sqrt(p_i * q_i)
@@ -93,21 +95,21 @@ edges = left_join(edges, authors_hellinger)
 
 ## Distribution of Hellinger distance between authors
 edges %>%
-    # mutate(post2010 = ifelse(year >= 2010, '≥2010', '<2010')) %>%
     ggplot(aes(h_authors, color = in_collab)) + 
     geom_density() +
     geom_rug() +
-    scale_x_continuous(trans = 'identity')
-    # facet_grid( ~ post2010)
+    scale_x_continuous(trans = 'identity') +
+    facet_grid(year_g ~ .)
 
 ## Distribution of topic_2 distances
 ggplot(edges, aes(topic_2_dist, color = in_collab)) + 
     geom_density() +
     geom_rug() +
-    scale_x_continuous(trans = 'identity')
+    scale_x_continuous(trans = 'identity') + 
+    facet_grid(year_g ~ .)
 
 edges %>%
-    group_by(in_collab) %>%
+    group_by(in_collab, year_g) %>%
     summarize_at(vars(h_authors, topic_2_dist), funs(mean, median))
 
 
@@ -122,15 +124,39 @@ net = graph_from_data_frame(edges, directed = FALSE,
 
 ## Plot
 set.seed(123)
-ggraph(net) +
-    geom_node_point(aes(color = topic_2), alpha = 1) +
-    # scale_color_brewer(palette = 'Set1') +
-    scale_color_gradient(low = 'blue', high = 'red') +
-    geom_edge_fan(aes(alpha = topic_2_dist), spread = 4) +
-    # scale_edge_color_gradient(low = 'red', high = 'blue') +
-    scale_edge_alpha_continuous(range = c(0, .7), trans = 'atanh') +
-    facet_edges(~ in_collab) +
-    theme_graph(foreground = 'black', strip_text_colour = 'white')
+# ggraph(net) + 
+#     geom_node_point(aes(color = topic_2), alpha = .7) +
+#     # scale_color_brewer(palette = 'Set1', na.value = 'yellow') +
+#     scale_color_gradient(low = 'blue', high = 'red') +
+#     geom_edge_fan(aes(), spread = 4, alpha = .5) +
+#     # scale_edge_color_gradient(low = 'red', high = 'blue') +
+#     scale_edge_alpha_continuous(range = c(0, .5), 
+#                                 trans = 'identity') +
+#     facet_edges(~ in_collab, ncol = 2) +
+#     theme_graph(foreground = 'black', strip_text_colour = 'white')
+
+## looks like consolidation of the subcommunities into the giant component happened around the time the collaboration was getting started
+
+nets = unique(E(net)$year_g) %>%
+    map(~ subgraph.edges(net, E(net)[E(net)$year_g == .x])) %>%
+    `names<-`(unique(E(net)$year_g))
+
+nets_over_time = map2(nets, names(nets),
+    ~ {ggraph(.x) + 
+        geom_node_point(aes(color = topic_2), alpha = .7) +
+        # scale_color_brewer(palette = 'Set1', na.value = 'yellow') +
+        scale_color_gradient(low = 'blue', high = 'red') +
+        geom_edge_fan(alpha = .3, spread = 4) +
+        # scale_edge_color_gradient(low = 'red', high = 'blue') +
+        scale_edge_alpha_continuous(range = c(0, .5), 
+                                    trans = 'identity') +
+        facet_edges(~ in_collab, ncol = 2) +
+        theme_graph(foreground = 'black', 
+                    strip_text_colour = 'white') + 
+        ggtitle(.y)})
+
+# plot_grid(plotlist = nets_over_time, ncol = 2)
+
 
 ## Comparison of the in-collaboration and out-of-collaboration networks
 net_incollab = subgraph.edges(net, E(net)[E(net)$in_collab])
