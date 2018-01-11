@@ -13,9 +13,10 @@ with open(abstracts_file) as fp:
 abstracts = pd.DataFrame(abstracts)
 ## Remove empty abstracts
 abstracts = abstracts[-pd.isnull(abstracts['abstract'])].reset_index(drop=True)
+# abstracts_2008 = abstracts[pd.to_datetime(abstracts['date']) <= pd.to_datetime('2008')]
 
-# In[6]: len(abstracts)
-# Out[6]: 17826
+# In[6]: len(abstracts_2008)
+# Out[6]: 3552
 
 
 ## --------------------
@@ -28,6 +29,15 @@ authors = pd.DataFrame({'auid': [value for row in abstracts['auids'] for value i
             .drop_duplicates()\
             .sort_values('auid')\
             .set_index('auid')
+# In[12]: len(authors)
+# Out[12]: 551
+# authors_2008 = pd.DataFrame({'auid': [value for row in abstracts_2008['auids'] for value in row]})\
+#             .drop_duplicates()\
+#             .sort_values('auid')\
+#             .set_index('auid')
+# In[14]: len(authors_2008)
+# Out[14]: 333
+
 
 known_authors_file = '../../Eisen-data/00_author_list.xlsx'
 known_authors = pd.read_excel(known_authors_file)
