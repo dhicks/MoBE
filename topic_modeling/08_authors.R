@@ -170,8 +170,9 @@ net_by_year = net_by_year$net %>%
                      H = {components(.x)$csize %>% {./sum(.)} %>% {-sum(. * log2(.))}},
                      # mean_distance = mean_distance(.x), 
                      # diameter = diameter(.x), 
-                     transitivity = transitivity(.x)
+                     transitivity = transitivity(.x),
                      # density = length(E(.x)) / (length(V(.x))*(length(V(.x))-1)/2) 
+                     topic_2_dist = mean(E(.)$topic_2_dist)
     )) %>%
     bind_cols(net_by_year, .) %>%
     # mutate_at(vars(gc, mean_distance, diameter), funs(. / size)) %>%
@@ -182,7 +183,7 @@ net_by_year %>%
     gather(statistic, value, -year, -in_collab) %>%
     ggplot(aes(year, value, color = in_collab)) + 
     geom_line() +
-    geom_hline(yintercept = 0, linetype = 'dashed') +
+    geom_hline(yintercept = 0, color = 'grey80') +
     # scale_y_log10() +
-    facet_grid(statistic ~ ., scales = 'free')
+    facet_wrap(~ statistic, scales = 'free')
 
