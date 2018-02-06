@@ -36,7 +36,10 @@ lda = lda %>%
 
 ## --------------------
 ## Exploring LDA output
-ggplot(lda, aes(topic_0, topic_1, fill = group)) + 
+# GGally::ggpairs(lda, columns = 3:5, mapping = aes(color = group))
+
+ggplot(lda, aes(topic_0, topic_2, fill = group, 
+                text = str_c(surname, ', ', given_name))) + 
     geom_point(shape = 21, color = 'black', size = 4, stroke = 1, 
         aes(alpha = !is.na(group))) +
     scale_fill_brewer(palette = 'Set1', na.value = 'yellow') +
@@ -44,8 +47,13 @@ ggplot(lda, aes(topic_0, topic_1, fill = group)) +
     stat_function(fun = function (x) .5 - x, color = 'black', xlim = c(0, .5))
 
 lda %>%
-    ggplot(aes(group, topic_2)) + 
-    geom_jitter(width = .1) + 
+    ggplot(aes(group, topic_1, fill = group, 
+               text = str_c(str_replace_na(surname), ', ', 
+                            str_replace_na(given_name), '; ', 
+                            paper_n))) + 
+    geom_jitter(shape = 21, color = 'black', size = 2, stroke = .5, 
+                width = .1) + 
+    scale_fill_brewer(palette = 'Set1', na.value = 'yellow') +
     geom_hline(aes(yintercept = .5), linetype = 'dashed')
 
 ggplot(lda, aes(H, color = group)) + geom_density() + geom_rug()
@@ -66,11 +74,11 @@ edges = abstracts_df %>%
               suffix = c('', '.x')) %>%
     left_join(lda, by = c('auid.y' = 'auid'),
               suffix = c('.x', '.y')) %>%
-    ## Distance wrt topic 2
-    mutate(topic_2_dist = abs(topic_2.x - topic_2.y)) %>%
+    ## Distance wrt topic 1
+    mutate(topic_1_dist = abs(topic_1.x - topic_1.y)) %>%
     ungroup() %>%
     ## Bundle years
-    mutate(year_g = cut(year, 3))
+    mutate(year_g = cut(year, 4))
     
 ## Hellinger distance https://en.wikipedia.org/wiki/Hellinger_distance#Discrete_distributions
 ## h^2(p, q) = 1 - sum sqrt(p_i * q_i)
@@ -101,8 +109,8 @@ edges %>%
     scale_x_continuous(trans = 'identity') +
     facet_grid(year_g ~ .)
 
-## Distribution of topic_2 distances
-ggplot(edges, aes(topic_2_dist, color = in_collab)) + 
+## Distribution of topic_1 distances
+ggplot(edges, aes(topic_1_dist, color = in_collab)) + 
     geom_density() +
     geom_rug() +
     scale_x_continuous(trans = 'identity') + 
@@ -110,7 +118,7 @@ ggplot(edges, aes(topic_2_dist, color = in_collab)) +
 
 edges %>%
     group_by(in_collab, year_g) %>%
-    summarize_at(vars(h_authors, topic_2_dist), funs(mean, median))
+    summarize_at(vars(h_authors, topic_1_dist), funs(mean, median))
 
 
 ## --------------------
@@ -124,16 +132,18 @@ net = graph_from_data_frame(edges, directed = FALSE,
 
 ## Plot
 set.seed(123)
-# ggraph(net) + 
-#     geom_node_point(aes(color = topic_2), alpha = .7) +
-#     # scale_color_brewer(palette = 'Set1', na.value = 'yellow') +
-#     scale_color_gradient(low = 'blue', high = 'red') +
-#     geom_edge_fan(aes(), spread = 4, alpha = .5) +
-#     # scale_edge_color_gradient(low = 'red', high = 'blue') +
-#     scale_edge_alpha_continuous(range = c(0, .5), 
-#                                 trans = 'identity') +
-#     facet_edges(~ in_collab, ncol = 2) +
-#     theme_graph(foreground = 'black', strip_text_colour = 'white')
+ggraph(net) +
+    geom_node_point(aes(color = topic_1), alpha = .7) +
+    # scale_color_brewer(palette = 'Set1', na.value = 'yellow') +
+    scale_color_gradient(low = 'blue', high = 'red', 
+                         guide = FALSE) +
+    geom_edge_fan(aes(alpha = year), spread = 4) +
+    # scale_edge_color_gradient(low = 'red', high = 'blue') +
+    scale_edge_alpha_continuous(range = c(0, .1),
+                                trans = 'identity', 
+                                guide = FALSE) +
+    facet_edges(~ in_collab, ncol = 2) +
+    theme_graph(foreground = 'black', strip_text_colour = 'white')
 
 ## looks like consolidation of the subcommunities into the giant component happened around the time the collaboration was getting started
 
@@ -143,19 +153,27 @@ nets = unique(E(net)$year_g) %>%
 
 nets_over_time = map2(nets, names(nets),
     ~ {ggraph(.x) + 
-        geom_node_point(aes(color = topic_2), alpha = .7) +
+        geom_node_point(aes(color = topic_1), alpha = .7) +
         # scale_color_brewer(palette = 'Set1', na.value = 'yellow') +
-        scale_color_gradient(low = 'blue', high = 'red') +
+        scale_color_gradient(low = 'blue', high = 'red', 
+                             guide = FALSE) +
         geom_edge_fan(alpha = .3, spread = 4) +
         # scale_edge_color_gradient(low = 'red', high = 'blue') +
-        scale_edge_alpha_continuous(range = c(0, .5), 
-                                    trans = 'identity') +
-        facet_edges(~ in_collab, ncol = 2) +
+        # scale_edge_alpha_continuous(range = c(0, .5), 
+        #                             trans = 'identity') +
+        facet_edges(~ in_collab, ncol = 1) +
         theme_graph(foreground = 'black', 
                     strip_text_colour = 'white') + 
         ggtitle(.y)})
 
-# plot_grid(plotlist = nets_over_time, ncol = 2)
+# plot_grid(plotlist = nets_over_time,
+#           ncol = length(nets_over_time), 
+#           rel_heights = c(.5, 1, 1, 1), axis = 't')
+
+gridExtra::grid.arrange(grobs = nets_over_time, 
+                        layout_matrix = rbind(
+                            1:length(nets_over_time), 
+                            c(NA, 2:length(nets_over_time))))
 
 
 ## Calculate network statistics over time
@@ -172,7 +190,7 @@ net_by_year = net_by_year$net %>%
                      # diameter = diameter(.x), 
                      transitivity = transitivity(.x),
                      # density = length(E(.x)) / (length(V(.x))*(length(V(.x))-1)/2) 
-                     topic_2_dist = mean(E(.)$topic_2_dist)
+                     topic_1_dist = mean(E(.)$topic_1_dist)
     )) %>%
     bind_cols(net_by_year, .) %>%
     # mutate_at(vars(gc, mean_distance, diameter), funs(. / size)) %>%
