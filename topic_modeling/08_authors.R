@@ -120,6 +120,17 @@ edges %>%
     group_by(in_collab, year_g) %>%
     summarize_at(vars(h_authors, topic_1_dist), funs(mean, median))
 
+## --------------------
+## Novel collaborations
+## Something like 5/8 of all coauthor dyads have their first pub in the collaboration
+edges %>%
+    group_by(auid.x, auid.y, in_collab) %>%
+    summarize(first_year = min(year)) %>%
+    spread(in_collab, first_year) %>%
+    mutate(first_in_collab = is.na(`FALSE`) | (`TRUE` < `FALSE`)) %>% 
+    replace_na(list('first_in_collab' = FALSE)) %>%
+    pull(first_in_collab) %>%
+    table()
 
 ## --------------------
 ## Build network
