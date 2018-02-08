@@ -114,9 +114,13 @@ parse = function (raw) {
     #     xml_text() %>%
     #     list()
     
+    references = xml %>%
+        xml_find_all('//bibliography/reference') %>%
+        xml_attr('id')
+
     tibble(scopus_id, doi, title, journal, 
            date, abstract, keywords, 
-           auids)
+           auids, references = list(references))
 }
 
 xml_to_parse = str_subset(dir(target_folder), '.xml.zip')
