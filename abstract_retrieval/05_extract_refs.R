@@ -9,9 +9,8 @@ registerDoSNOW(cl)
 
 ## ------------------------------
 ## Core paper references
-## If the dataframe of core paper references has already been built, 
-## then just load it.  
-## Otherwise we need to parse the core paper xml files.  
+## Either load df of core paper references, 
+## or parse refs from core paper xml files
 references_file = '../../Eisen-data/05_core_refs.Rdata'
 if (file.exists(references_file)) {
     target_folder = '../../Eisen-data/04-abstracts'
@@ -40,7 +39,7 @@ if (file.exists(references_file)) {
     pb = txtProgressBar(max = length(xml_to_parse), style = 3)
     progress = function(n) setTxtProgressBar(pb, n)
     system.time({
-        core_refs_df <- foreach(xml_file = xml_to_parse[1:200], 
+        core_refs_df <- foreach(xml_file = xml_to_parse, 
                                  .combine = bind_rows, 
                                  .multicombine = TRUE, 
                                  .packages = c('tidyverse', 'xml2', 'stringr'),
@@ -71,54 +70,13 @@ sid_to_eid = function(sid) {
     str_c('2-s2.0-', sid)
 }
 
-## Where are the forward citation search results going? 
-target_folder = '../../Eisen-data/05_forward_cites'
-if (!dir.exists(target_folder)) {
-    dir.create(target_folder)
-}
-
-## Functions to scrape the API
-source('api_key.R')
-scrape_ = function (this_eid) {
-    ## Basically just an abstraction of the RCurl call
-    base_url = 'https://api.elsevier.com/content/search/scopus'
-    query_url = str_c(base_url, '?query=refeid(', this_eid, ')',
-                      '&count=200',  ## max 200 results per query
-                      '&httpAccept=application/xml',
-                      '&apiKey=', api_key)
-    
-    raw = getURL(query_url)
-    raw
-}
-scrape = function (this_sid, target_folder) {
-    ## Either scrape from the API + save the result OR pass
-    target_file_xml = str_c(target_folder, '/', this_sid, '.xml')
-    target_file = str_c(target_folder, '/', this_sid, '.xml.zip')
-    if (!file.exists(target_file)) {
-        this_eid = sid_to_eid(this_sid)
-        raw = scrape_(this_eid)
-        write_file(raw, target_file_xml)
-        return(TRUE)
-    } else {
-        return(TRUE)
-    }
-}
-
-sids_to_scrape = core_refs_df %>%
+## Scopus IDs of interest
+core_refs_df %>%
     pull(ref_id) %>%
-    unique()
-
-pb = txtProgressBar(max = length(sids_to_scrape), style = 3)
-progress = function(n) setTxtProgressBar(pb, n)
-system.time(
-success <- foreach(this_sid = sids_to_scrape[1:200], 
-                   .combine = c, 
-                   .multicombine = TRUE, 
-                   .packages = c('tidyverse', 'RCurl', 'stringr'),
-                   .options.snow = list(progress = progress),
-                   .verbose = TRUE) %do%
-    scrape(this_sid, target_folder)
-)
-
-success_df = tibble(sids_to_scrape, success)
-save(success_df, file = '../../Eisen-data/05_forward_search_success.Rdata')
+    unique() %>%
+    ## Convert to EIDs
+    sid_to_eid %>%
+    ## Form Scopus query
+    str_c('refeid(', ., ')', collapse = ' OR ') %>%
+    ## And write to disk
+    write_lines('../../Eisen-data/05_forward_search_query.txt')
