@@ -54,12 +54,15 @@ if (file.exists(references_file)) {
 }
 
 ## Distribution of citation counts for references, eg, 70% of references are only cited 1 time or whatever
-core_refs_df %>%
+core_refs_count = core_refs_df %>%
     count(ref_id) %>%
     rename(cite_count = n) %>%
-    arrange(desc(cite_count)) %>%
-    ggplot(aes(cite_count)) + 
-    stat_ecdf()
+    arrange(desc(cite_count))
+ggplot(core_refs_count, aes(cite_count)) + 
+    stat_ecdf() +
+    scale_x_log10()
+
+threshold = quantile(core_refs_count$cite_count, probs = .999)
 
 
 ## ------------------------------
@@ -71,12 +74,15 @@ sid_to_eid = function(sid) {
 }
 
 ## Scopus IDs of interest
-core_refs_df %>%
+core_refs_count %>%
+    filter(cite_count >= threshold) %>%
     pull(ref_id) %>%
-    unique() %>%
     ## Convert to EIDs
     sid_to_eid %>%
     ## Form Scopus query
     str_c('refeid(', ., ')', collapse = ' OR ') %>%
+    str_c('PUBYEAR AFT 2002 AND (', ., ')') %>%
     ## And write to disk
     write_lines('../../Eisen-data/05_forward_search_query.txt')
+
+## This yields about 1M documents
