@@ -89,6 +89,9 @@ parse = function (raw) {
     journal = xml %>%
         xml_find_first('//prism:publicationName') %>%
         xml_text()
+    issn = xml %>%
+        xml_find_first('//prism:issn') %>%
+        xml_text()
     date = xml %>%
         xml_find_first('//prism:coverDate') %>%
         xml_text()
@@ -118,7 +121,7 @@ parse = function (raw) {
         xml_find_all('//bibliography/reference') %>%
         xml_attr('id')
 
-    tibble(scopus_id, doi, title, journal, 
+    tibble(scopus_id, doi, title, journal, issn,
            date, abstract, keywords, 
            auids, references = list(references))
 }
@@ -143,15 +146,15 @@ abstracts_df <- foreach(xml_file = xml_to_parse,
 stopCluster(cl)
 
 
-
 ## Filter down to auids in our list of authors
 abstracts_df = abstracts_df %>%
     unnest(auids, .drop = FALSE) %>%
     filter(auids %in% authors$auid) %>% 
-    group_by(scopus_id, doi, title, journal, date) %>%
+    group_by(scopus_id, doi, title, journal, issn, date) %>%
     summarize(abstract = first(abstract),
               keywords = list(first(keywords)),
-              auids = list(auids))
+              auids = list(auids)) %>%
+    ungroup()
 
 
 ## Save results
