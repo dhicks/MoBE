@@ -4,14 +4,19 @@ library(rcrossref)
 library(lubridate)
 
 ## Load list of papers in the collaboration --------------------
-collab_df = read_csv('../../Eisen-data/01_zotero.csv')
+collab_df = read_csv('../../Eisen-data/00_Sloan.csv') %>%
+    mutate(pub_date = `Publication Year`,
+           issn = str_split(ISSN, ','))
 
 ## Get metadata --------------------
+## At one level, thi isn't necessary, because 00_Sloan.csv contains the metadata
+## However, running through crossref gets us more variant ISSNs
+## And shortens the final journal list by ~20 journals
 cr_df = cr_works(collab_df$DOI, .progress = 'text')
 cr_df = cr_df$data
 cr_df = cr_df %>%
-    mutate(pub_date = parse_date_time(issued, 
-                                      orders = c('ymd', 'ym', 'y')), 
+    mutate(pub_date = parse_date_time(issued,
+                                      orders = c('ymd', 'ym', 'y')),
            issn = str_split(issn, ','))
 
 ## Construct canonical ISSNs --------------------
@@ -22,7 +27,7 @@ canonical_issns = cr_df %>%
     `names<-`(c('issn1', 'issn2')) %>%
     as_tibble() %>%
     mutate(issn1 = simplify(issn1), 
-           issn2 = simplify(issn2)) %>%
+           issn2 = simplify(issn2)) %>% 
     rowwise() %>%
     mutate(issn_canonical = min(issn1, issn2), 
            issn_list = list(sort(c(issn1, issn2)))) %>%
@@ -64,7 +69,7 @@ last_year = cr_df %>%
 ## Retrieve all papers from these journals during the same time period --------------------
 ## NB Very very slow! 
 all_papers_cr = journals_df %>%
-    # filter(issn %in% c('1526-498X', '0074-7742')) %>%
+    filter(issn %in% c('1526-498X', '0074-7742')) %>%
     pull(issn) %>%
     quietly(cr_journals)(works = TRUE, cursor = '*', 
                 limit = 1000, cursor_max = 2000000, 
