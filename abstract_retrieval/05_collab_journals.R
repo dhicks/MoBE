@@ -4,9 +4,7 @@ library(rcrossref)
 library(lubridate)
 
 ## Load list of papers in the collaboration --------------------
-collab_df = read_csv('../../Eisen-data/00_Sloan.csv') %>%
-    mutate(pub_date = `Publication Year`,
-           issn = str_split(ISSN, ','))
+collab_df = read_csv('../../Eisen-data/00_Sloan.csv')
 
 ## Get metadata --------------------
 ## At one level, thi isn't necessary, because 00_Sloan.csv contains the metadata
