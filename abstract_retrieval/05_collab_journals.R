@@ -67,22 +67,25 @@ last_year = cr_df %>%
 ## Retrieve all papers from these journals during the same time period --------------------
 ## NB Very very slow! 
 all_papers_cr = journals_df %>%
-    filter(issn %in% c('1526-498X', '0074-7742')) %>%
+    # filter(issn %in% c('1758-0463', '2196-3010', '2058-5276')) %>%
+    filter(issn != '1932-6203') %>% # Drop PLoS ONE
     pull(issn) %>%
-    quietly(cr_journals)(works = TRUE, cursor = '*', 
+    safely(cr_journals)(works = TRUE, cursor = '*', 
                 limit = 1000, cursor_max = 2000000, 
                 filter = c(from_pub_date = str_c(first_year, '-01-01'),
                            until_pub_date = str_c(last_year, '-12-31')), 
-                .progress = 'text')
+                .progress = 'time')
 
-warns = all_papers_cr$warnings
+# warns = all_papers_cr$warnings
+errors = all_papers_cr$error
 
 all_papers_df = all_papers_cr$result$data %>%
     select(-link, -funder) %>%
     ## Remove rows w/ NULL author values
     filter(!simplify(map(.$author, is.null))) %>%
+    select(-assertion) %>%
     unnest()
 
 ## Write results --------------------
-write_lines(warns, '05_warnings.txt')
+write_lines(errors, '05_errors.txt')
 save(all_papers_df, file = '05_all_papers.Rdata')
