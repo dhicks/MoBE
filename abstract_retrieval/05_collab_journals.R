@@ -86,8 +86,7 @@ all_papers_df = all_papers_cr$result$data %>%
     filter(!simplify(map(.$author, is.null))) %>%
     select(one_of(c('container.title', 'created', 
                     'doi', 'issn', 
-                    'title', 'author'))) %>%
-    unnest()
+                    'title', 'author')))
 
 ## Write results --------------------
 write_lines(errors, '../../Eisen-data/05_errors.txt')
