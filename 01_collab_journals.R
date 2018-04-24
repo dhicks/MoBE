@@ -10,7 +10,8 @@ collab_df = read_csv('../../Eisen-data/00_Sloan.csv')
 ## At one level, thi isn't necessary, because 00_Sloan.csv contains the metadata
 ## However, running through crossref gets us more variant ISSNs
 ## And shortens the final journal list by ~20 journals
-cr_df = cr_works(collab_df$DOI, .progress = 'text')
+cr_df = collab_df$DOI %>%
+    cr_works(.progress = 'time')
 cr_df = cr_df$data
 cr_df = cr_df %>%
     mutate(pub_date = parse_date_time(issued,
@@ -83,9 +84,10 @@ all_papers_df = all_papers_cr$result$data %>%
     select(-link, -funder) %>%
     ## Remove rows w/ NULL author values
     filter(!simplify(map(.$author, is.null))) %>%
-    select(-assertion) %>%
-    unnest()
+    select(one_of(c('container.title', 'created', 
+                    'doi', 'issn', 
+                    'title', 'author')))
 
 ## Write results --------------------
-write_lines(errors, '05_errors.txt')
-save(all_papers_df, file = '05_all_papers.Rdata')
+write_lines(errors, '../../Eisen-data/05_errors.txt')
+save(all_papers_df, file = '../../Eisen-data/05_all_papers.Rdata')
