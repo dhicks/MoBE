@@ -1,90 +1,166 @@
+## This script retrieves metadata for "target papers," which include (a) papers in the Sloan collaboration, and (b) the papers identified in 02_comparison_set to cover the comparison set of authors.  
+## 
+## The primary goal is to identify Scopus author IDs for all authors. 
+
 library(tidyverse)
 library(RCurl)
-library(stringr)
-library(readr)
 library(xml2)
 
 source('api_key.R')
 
-dataf = read_csv('../../Eisen-data/01_Zotero.csv')
+## Sloan collaboration papers
+sloan_df = read_csv('../Eisen-data/00_Sloan.csv') %>%
+    filter(!is.na(DOI))
+## Comparison set
+comparison_df = read_rds('../Eisen-data/02_comparison_papers.Rds')
 
-# this_doi = dataf$DOI[[1]]
+dois = unique(c(sloan_df$DOI, comparison_df$doi))
 
-scopus_data = tibble()
-for (this_doi in dataf$DOI) {
-    ## First, use abstract retrieval to get the Scopus ID
-    doi_base_url = 'https://api.elsevier.com/content/abstract/doi/'
-    doi_query_url = str_c(doi_base_url, 
-                          this_doi, '?', 
-                          'apiKey=', api_key)
-    this_sid = NA
-    tryCatch({
-        doi_response = read_xml(doi_query_url)
-        xml_ns_strip(doi_response)
-        this_sid = doi_response %>%
-            xml_find_first('//dc:identifier') %>%
-            xml_text() %>%
-            str_extract('[0-9]+')
-    },
-    error = function (e) e)
-    
-    ## Then use the Scopus ID, since for some reason that query gives you all the authors, etc.
-    if (is.na(this_sid)) {
-        new_data = tibble(doi = this_doi)
-    } else {
-        scopus_base_url = 'https://api.elsevier.com/content/abstract/scopus_id/'
-        scopus_query_url = str_c(scopus_base_url, 
-                                 this_sid, '?', 
-                                 'apiKey=', api_key)
+## DOI-Scopus ID crosswalk ----
+sid_doi_xwalk_file = '../Eisen-data/03_doi_sid_xwalk.Rds'
+if (!file.exists(sid_doi_xwalk_file)) {
+    get_scopus_id = function (this_doi) {
+        doi_base_url = 'https://api.elsevier.com/content/abstract/doi/'
+        doi_query_url = str_c(doi_base_url, 
+                              this_doi, '?', 
+                              'apiKey=', api_key)
+        this_sid = NA
         tryCatch({
-            scopus_response_raw = getURL(scopus_query_url)
-            scopus_response = read_xml(scopus_response_raw) 
-            xml_ns_strip(scopus_response)
-            
-            this_cite_count = scopus_response %>%
-                xml_find_all('//citedby-count') %>%
+            response = getURL(doi_query_url)
+            xml = read_xml(response)
+            xml_ns_strip(xml)
+            this_sid = xml %>%
+                xml_find_first('//dc:identifier') %>%
                 xml_text() %>%
-                as.integer()
-            this_pub_date = scopus_response %>% 
-                xml_find_all('//prism:coverDate') %>% 
-                xml_text()
-            this_title = scopus_response %>%
-                xml_find_first('//dc:title') %>%
-                xml_text()
-            this_journal = scopus_response %>%
-                xml_find_first('//prism:publicationName') %>%
-                xml_text()
-            
-            author_list = scopus_response %>%
-                xml_find_all('//author-group/author')
-            these_auids = author_list %>%
-                xml_attr('auid')
-            these_surnames = author_list %>%
-                xml_find_first('ce:surname') %>%
-                xml_text()
-            these_given_names = author_list %>%
-                xml_find_first('ce:given-name') %>%
-                xml_text()
-            
-            new_data = tibble(doi = this_doi, 
-                              sid = this_sid,
-                              cite_count = this_cite_count, 
-                              pub_date = this_pub_date, 
-                              title = this_title, 
-                              journal = this_journal,
-                              auid = list(these_auids), 
-                              surnames = list(these_surnames), 
-                              given_names = list(these_given_names), 
-                              raw = scopus_response_raw)
+                str_extract('[0-9]+')
         },
-        error = function (e) {
-            new_data = tibble(doi = this_doi, 
-                              sid = this_sid,
-                              error = e)
-            return(new_data)})
+        error = function (e) e)
         
+        return(tibble(doi = this_doi, sid = this_sid))
     }
-    scopus_data = bind_rows(scopus_data, new_data)
+    
+    sids_df = plyr::ldply(dois, get_scopus_id, .progress = 'time')
+    write_rds(sids_df, sid_doi_xwalk_file)
+} else {
+    sids_df = read_rds(sid_doi_xwalk_file)
 }
 
-save(scopus_data, file = '../../Eisen-data/02_Scopus.Rdata')
+
+## Download paper metadata ----
+sids = sids_df %>%
+    filter(!is.na(sid)) %>% 
+    pull(sid)
+
+target_folder = '../Eisen-data/paper_metadata'
+
+scrape_ = function (this_sid) {
+    ## Basically just an abstraction of the RCurl call
+    base_url = 'https://api.elsevier.com/content/abstract/scopus_id/'
+    query_url = str_c(base_url, 
+                      this_sid, '?',
+                      'apiKey=', api_key)
+    
+    raw = getURL(query_url)
+    raw
+}
+scrape = function (this_sid, target_folder) {
+    ## Either scrape from the API + save the result OR pass
+    target_file_xml = str_c(target_folder, '/', this_sid, '.xml')
+    target_file = str_c(target_folder, '/', this_sid, '.xml.zip')
+    if (!file.exists(target_file)) {
+        raw = scrape_(this_sid)
+        write_file(raw, target_file_xml)
+        zip(target_file, target_file_xml, flags = '-9Xq')
+        unlink(target_file_xml)
+        return(TRUE)
+    } else {
+        return(TRUE)
+    }
+}
+
+sids_df %>%
+    filter(!is.na(sid)) %>%
+    pull(sid) %>%
+    # head(100) %>%
+    plyr::l_ply(scrape, target_folder, .progress = 'time')
+
+## Parse paper metadata -----
+parse = function (this_sid, target_folder) {
+    target_file = str_c(target_folder, '/', this_sid, '.xml.zip')
+    # print(target_file)
+    raw = read_file(target_file)
+    
+    xml = read_xml(raw)
+    xml = xml_ns_strip(xml)
+    
+    author_nodes = xml %>%
+        xml_find_all('//authors/author')
+    auid = author_nodes %>%
+        xml_attr('auid')
+    
+    given_name = author_nodes %>%
+        xml_find_first('ce:given-name') %>%
+        xml_text()
+    family_name = author_nodes %>%
+        xml_find_first('ce:surname') %>%
+        xml_text()
+
+    tibble(sid = this_sid, auid, given_name, family_name)
+}
+
+## ~3 minutes
+doi_auid_df = sids_df %>%
+    filter(!is.na(sid)) %>%
+    pull(sid) %>%
+    # head(50) %>%
+    plyr::ldply(parse, target_folder, .progress = 'time') %>%
+    as_tibble()
+
+## Sloan collaboration author IDs ----
+sloan_authors_df = sloan_df %>%
+    ## Join to Scopus data using crosswalk
+    inner_join(sids_df, by = c('DOI' = 'doi')) %>%
+    inner_join(doi_auid_df) %>%
+    select(sid, auid:family_name) %>%
+    ## Construct canonical names per author ID
+    count(auid, given_name, family_name) %>%
+    group_by(auid) %>%
+    summarize(given_name = given_name[which.max(n)], 
+              family_name = family_name[which.max(n)], 
+              n_collaboration = sum(n)) %>%
+    ## Then regroup by canonical names to catch some false duplicates
+    group_by(given_name, family_name) %>%
+    summarize(auid = list(auid), 
+              n_collaboration = sum(n_collaboration)) %>%
+    ungroup()
+
+## 393 authors with > 1 paper in the collaboration
+ggplot(sloan_authors_df, aes(n_collaboration)) + stat_ecdf()
+filter(sloan_authors_df, n_collaboration > 1)
+
+write_rds(sloan_authors_df, '../Eisen-data/03_sloan_authors.Rds')
+
+## Comparison set author IDs -----
+comparison_authors_df = comparison_df %>%
+    unnest() %>%
+    inner_join(sids_df) %>%
+    inner_join(doi_auid_df) %>%
+    filter(family == family_name, given == given_name) %>%
+    ## Construct canonical names per author ID
+    count(auid, given_name, family_name) %>%
+    group_by(auid) %>%
+    summarize(given_name = given_name[which.max(nn)], 
+              family_name = family_name[which.max(nn)]) %>%
+    arrange(family_name, given_name) %>% 
+    ## Then regroup to catch false duplicates
+    group_by(given_name, family_name) %>%
+    summarize(auid = list(auid))
+
+## 18 authors who ended up in both lists
+## This is likely due to name variations 
+## (recall simple matching was used to construct the comparison set)
+intersect(simplify(comparison_authors_df$auid), 
+          simplify(sloan_authors_df$auid))
+
+write_rds(comparison_authors_df, '../Eisen-data/03_comparison_authors.Rds')
+
