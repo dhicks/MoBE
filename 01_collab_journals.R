@@ -1,10 +1,12 @@
+## This script uses CrossRef to build a list of papers published in the same journals as the Sloan collaboration. 
+
 library(tidyverse)
 ## devtools::install_github('ropensci/rcrossref')
 library(rcrossref)
 library(lubridate)
 
 ## Load list of papers in the collaboration --------------------
-collab_df = read_csv('../../Eisen-data/00_Sloan.csv')
+collab_df = read_csv('../Eisen-data/00_Sloan.csv')
 
 ## Get metadata --------------------
 ## At one level, thi isn't necessary, because 00_Sloan.csv contains the metadata
@@ -89,5 +91,5 @@ all_papers_df = all_papers_cr$result$data %>%
                     'title', 'author')))
 
 ## Write results --------------------
-write_lines(errors, '../../Eisen-data/05_errors.txt')
-save(all_papers_df, file = '../../Eisen-data/05_all_papers.Rdata')
+write_lines(errors, '../../Eisen-data/01_errors.txt')
+save(all_papers_df, file = '../../Eisen-data/01_all_papers.Rdata')

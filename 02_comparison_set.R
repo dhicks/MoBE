@@ -1,17 +1,19 @@
+## This script uses the paper list produced by 01_collab_journals to build a comparison set of authors.  
+
 library(tidyverse)
+n_authors = 1000 # Target size for comparison set
 
 ## Load data --------------------
 ## Papers in the Sloan collaboration
-collab_df = read_csv('../../Eisen-data/00_Sloan.csv')
-## All papers from these journals
-load('../../Eisen-data/05_all_papers.Rdata')
+collab_df = read_csv('../Eisen-data/00_Sloan.csv')
+## All papers from the same journals
+load('../Eisen-data/01_all_papers.Rdata')
 
 ## Drop journals with a high number of publications
 ## Assumption here is that these are more general
 all_papers_df = all_papers_df %>%
     add_count(container.title) %>%
     filter(n < 10000)
-
 
 all_papers_df = all_papers_df %>%
     mutate(in_collab = doi %in% collab_df$DOI) %>%
@@ -31,13 +33,16 @@ ggplot(author_counts, aes(n, color = in_collab)) +
 table(author_counts$in_collab)
 
 ## Comparison set -----
-## The 1k most prolific authors in the same journals who were not part of the collaboration
+## The most prolific authors in the same journals who were not part of the collaboration
 comparison_set = author_counts %>%
     filter(!in_collab) %>%
     arrange(desc(n)) %>%
-    slice(1:1000)
+    slice(1:n_authors)
 
-all_papers_df %>% 
+## A df of papers covering the authors in the comparison set
+## These have been selected to efficiently cover all the authors; 
+## they should not be used except to identify Scopus author IDs
+comparison_papers = all_papers_df %>% 
     inner_join(comparison_set, by = c('given', 'family')) %>%
     select(container.title:title, given, family) %>%
     add_count(doi) %>%
@@ -46,5 +51,7 @@ all_papers_df %>%
     filter(row_number() == 1) %>%
     ungroup() %>%
     nest(given, family)
+
+write_rds(comparison_papers, '../Eisen-data/02_comparison_papers.Rds')
 
 
