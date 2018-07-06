@@ -68,7 +68,7 @@ stopCluster(cl)
 
 
 ## Parser ----
-parse = function (raw) {
+parse_ = function (raw) {
     xml = read_xml(raw)
     xml = xml_ns_strip(xml)
     
@@ -100,19 +100,31 @@ parse = function (raw) {
         xml_text() %>%
         list()
     
+    subject_nodes = xml %>%
+        xml_find_all('//subject-areas/subject-area')
+    subject_code = subject_nodes %>%
+        xml_attr('code')
+    subject_name = subject_nodes %>%
+        xml_text()
+    subject_area = subject_nodes %>%
+        xml_attr('abbrev')
+    subjects = tibble(subject_code, 
+                      subject_name, 
+                      subject_area)
+    
     author_nodes = xml %>%
         xml_find_all('//authors/author')
     auids = author_nodes %>%
-        xml_attr('auid') %>%
-        list()
-    # surnames = author_nodes %>%
-    #     xml_find_first('ce:surname') %>%
-    #     xml_text() %>%
-    #     list()
-    # given_names = author_nodes %>%
-    #     xml_find_first('ce:given-name') %>%
-    #     xml_text() %>%
-    #     list()
+        xml_attr('auid')
+    surnames = author_nodes %>%
+        xml_find_first('ce:surname') %>%
+        xml_text()
+    given_names = author_nodes %>%
+        xml_find_first('ce:given-name') %>%
+        xml_text()
+    authors = tibble(auid = auids, 
+                     surname = surnames, 
+                     given_name = given_names)
     
     references = xml %>%
         xml_find_all('//bibliography/reference') %>%
@@ -120,42 +132,47 @@ parse = function (raw) {
 
     tibble(scopus_id, doi, title, journal, issn,
            date, abstract, keywords, 
-           auids, references = list(references))
+           authors = list(authors), 
+           subjects = list(subjects),
+           references = list(references))
+}
+parser = function(scopus_id, target_folder) {
+    full_path = str_c(target_folder, '/', scopus_id, '.xml.zip')
+    raw = read_file(full_path)
+    return(parse_(raw))
 }
 
-## ~ 3.3 hours
-## NB ~10% of papers in target_folder don't match one of our author IDs and are just filtered out in the next step.  It would probably be (a little) more efficient to parse just those identified in papers_to_retrieve.  
-xml_to_parse = str_subset(dir(target_folder), '.xml.zip')
-cl = makeCluster(2)
+## ~ 2 hours
+cl = makeCluster(3)
 registerDoSNOW(cl)
 pb = txtProgressBar(max = length(papers_to_retrieve), style = 3)
 progress = function(n) setTxtProgressBar(pb, n)
-system.time(
-abstracts_df <- foreach(xml_file = xml_to_parse, 
+tictoc::tic()
+abstracts_df_unfltd <- foreach(scopus_id = papers_to_retrieve, 
                        .combine = bind_rows, 
                        .multicombine = TRUE, 
                        .packages = c('tidyverse', 'xml2', 'stringr'),
                        .options.snow = list(progress = progress),
-                       .verbose = FALSE) %dopar% {
-                           full_path = str_c(target_folder, '/', xml_file)
-                           raw = read_file(full_path)
-                           parse(raw)
-                       }
-)
+                       .verbose = FALSE) %dopar% 
+    parser(scopus_id, target_folder)
+tictoc::toc()
 stopCluster(cl)
 
 
 ## Filter down to auids in our list of authors
-## ~ 15 sec
+## ~ 19 sec
 tictoc::tic()
-abstracts_df = abstracts_df %>%
-    unnest(auids, .drop = FALSE) %>%
-    filter(auids %in% author_histories$auid) %>% 
-    group_by(scopus_id, doi, title, journal, issn, date) %>%
-    summarize(abstract = first(abstract),
-              keywords = list(first(keywords)),
-              auids = list(auids)) %>%
-    ungroup()
+other_list_cols = abstracts_df_unfltd %>%
+    group_by(scopus_id) %>%
+    select_if(is.list) %>%
+    ungroup() %>%
+    select(-authors)
+
+abstracts_df = abstracts_df_unfltd %>%
+    unnest(authors, .drop = TRUE) %>%
+    filter(auid %in% author_histories$auid) %>% 
+    nest(auid:given_name, .key = 'authors') %>%
+    left_join(other_list_cols)
 tictoc::toc()
 
 
