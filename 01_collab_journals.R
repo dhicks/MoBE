@@ -9,7 +9,7 @@ library(lubridate)
 collab_df = read_csv('../Eisen-data/00_Sloan.csv')
 
 ## Get metadata --------------------
-## At one level, thi isn't necessary, because 00_Sloan.csv contains the metadata
+## At one level, this isn't necessary, because 00_Sloan.csv contains the metadata
 ## However, running through crossref gets us more variant ISSNs
 ## And shortens the final journal list by ~20 journals
 cr_df = collab_df$DOI %>%
@@ -18,7 +18,7 @@ cr_df = cr_df$data
 cr_df = cr_df %>%
     mutate(pub_date = parse_date_time(issued,
                                       orders = c('ymd', 'ym', 'y')),
-           issn = str_split(issn, ','))
+           issn = str_split(ISSN, ','))
 
 ## Construct canonical ISSNs --------------------
 canonical_issns = cr_df %>%
@@ -27,26 +27,28 @@ canonical_issns = cr_df %>%
     transpose() %>%
     `names<-`(c('issn1', 'issn2')) %>%
     as_tibble() %>%
-    mutate(issn1 = simplify(issn1), 
-           issn2 = simplify(issn2)) %>% 
+    mutate(issn1 = simplify(issn1),
+           # issn2 = map_chr(issn2, ~ ifelse(is.null(.), NA_character_, .))) %>% 
+           issn2 = simplify(issn2)) %>%
     rowwise() %>%
-    mutate(issn_canonical = min(issn1, issn2), 
-           issn_list = list(sort(c(issn1, issn2)))) %>%
+    mutate(issn_canonical = min(issn1, issn2, na.rm = TRUE), 
+           issn_list = list(sort(c(issn1, issn2)))) %>% 
     gather(key, issn, issn1:issn2) %>%
     select(-key) %>%
-    filter(!duplicated(.))
+    filter(!is.na(issn), !duplicated(.))
 
 journals_df = cr_df %>%
     ## Replace ISSNs with canonical ISSNs
-    mutate(issn = str_extract(issn, '[0-9X\\-]+')) %>% 
+    # mutate(issn = str_extract(issn, '[0-9X\\-]+')) %>% 
+    mutate(issn = map_chr(issn, first)) %>%
     left_join(canonical_issns) %>% 
-    mutate(issn_canonical = ifelse(!is.na(issn_canonical), 
-                                   issn_canonical, 
-                                   issn)) %>% 
+    mutate(issn_canonical = ifelse(!is.na(issn_canonical),
+                                   issn_canonical,
+                                   issn)) %>%
     select(-issn, -issn_list) %>%
     rename(issn = issn_canonical) %>%
     ## Count papers
-    count(issn, journal = container.title) %>%
+    count(issn, journal = container.title) %>% 
     group_by(issn) %>%
     summarize(journal = first(journal[which(n == max(n))]), 
               collab_papers = sum(n)) %>% 

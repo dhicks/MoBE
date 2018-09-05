@@ -11,6 +11,11 @@ load('../Eisen-data/01_all_papers.Rdata')
 
 ## Drop journals with a high number of publications
 ## Assumption here is that these are more general
+count(all_papers_df, container.title) %>%
+    arrange(desc(n)) %>% 
+    filter(n >= 10000) %>%
+    pull(n) %>% sum()
+
 all_papers_df = all_papers_df %>%
     add_count(container.title) %>%
     filter(n < 10000)
