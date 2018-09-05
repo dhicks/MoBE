@@ -1,18 +1,34 @@
-## TODO: save net, net_gc
 ## Setup ----
 library(tidyverse)
 library(lubridate)
 library(igraph)
 library(tidygraph)
 
+# sloan_authors = read_rds('../Eisen-data/03_sloan_authors.Rds') %>%
+#     filter(n_collaboration > 1) %>%
+#     unnest(auid) %>%
+#     pull(auid)
+
+## NB logic here should be same as 04
+comparison_df_unfltd = read_rds('../Eisen-data/03_comparison_authors.Rds')
 sloan_authors = read_rds('../Eisen-data/03_sloan_authors.Rds') %>%
-    unnest(auid) %>%
+    unnest() %>%
+    mutate(in_comparison = auid %in% unlist(comparison_df_unfltd$auid)) %>%
+    filter(n_collaboration > 1 | in_comparison) %>%
     pull(auid)
-sloan_papers = read_csv('../Eisen-data/00_Sloan.csv') %>% 
+comparison_authors = read_rds('../Eisen-data/03_comparison_authors.Rds') %>%
+    unnest() %>%
+    ungroup() %>%
+    filter(!(auid %in% sloan_authors)) %>%
+    pull(auid)
+
+assertthat::assert_that(is_empty(intersect(sloan_authors, comparison_authors)), 
+                        msg = 'Author lists overlap')
+
+sloan_papers = read_csv('../Eisen-data/00_Sloan.csv') %>%
     filter(!is.na(DOI)) %>%
     pull(DOI) %>%
     unique()
-
 
 abstracts_df = read_rds('../Eisen-data/05_abstracts.Rds')  %>%
     select(-keywords, -references) %>%
@@ -22,19 +38,29 @@ abstracts_df = read_rds('../Eisen-data/05_abstracts.Rds')  %>%
     mutate(sloan_paper = doi %in% sloan_papers, 
            sloan_author = auid %in% sloan_authors)
 
+## 05 filters out auids that aren't in the list to retrieve, so non-Sloan authors == comparison authors
+abstracts_df %>%
+    filter(!sloan_author) %>%
+    pull(auid) %>%
+    unique() %>%
+    length() %>%
+    assertthat::are_equal(length(comparison_authors), 
+                          msg = 'Length mismatch between non-Sloan and comparison authors')
+
 
 ## Node and edge dfs ----
 ## Edges: docs w/ more than 2 authors in the dataset
 edges = abstracts_df %>%
-    select(scopus_id:date, year, sloan_paper, auid) %>%
+    select(scopus_id:date, year, sloan_paper, auid, sloan_author) %>%
     ## Make pairs by joining on everything other than auids
     full_join(., ., 
-              by = names(.)[!(names(.) %in% 'auid')]) %>%
+              by = names(.)[!(names(.) %in% c('auid', 'sloan_author'))]) %>%
     filter(auid.x < auid.y) %>%
     ## Put the auids on the left side of the df and rename
     select(auid.x, auid.y, everything()) %>%
+    mutate(heterophily = sloan_author.x != sloan_author.y) %>%
     ## Simplify
-    count(auid.x, auid.y, year, sloan_paper) %>%
+    count(auid.x, auid.y, year, sloan_paper, heterophily) %>%
     mutate(year_g = cut(year, 4))
 
 ## Nodes:  authors
@@ -69,5 +95,5 @@ net_gc = net %>%
     select(-component, -component_size)
 
 ## Save output ----
-write_rds(net, '07_net_full.Rds')
-write_rds(net_gc, '07_net_gc.Rds')
+write_rds(net, '../Eisen-data/07_net_full.Rds')
+write_rds(net_gc, '../Eisen-data/07_net_gc.Rds')
