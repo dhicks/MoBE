@@ -2,7 +2,13 @@ library(tidyverse)
 library(igraph)
 library(tidygraph)
 library(ggraph)
+library(furrr)
 
+## Options for futures
+plan(multiprocess, workers = 2)
+options(future.globals.maxSize = 850*1024^2)
+
+## Load data
 net = read_rds('../Eisen-data/07_net_full.Rds')
 net_gc = read_rds('../Eisen-data/07_net_gc.Rds')
 
@@ -80,7 +86,7 @@ net_gc %>%
 #     activate(edges) %>%
 #     filter(year <= 2004)
 
-
+## Split out into cumulative annual networks
 ## NB whole network, not just GC
 net_by_year = cross_df(list(year = as.integer(unique(E(net)$year)), 
                             sloan_author = c(TRUE, FALSE))) %>%
@@ -91,7 +97,43 @@ net_by_year = cross_df(list(year = as.integer(unique(E(net)$year)),
                               induced_subgraph(., which((V(.)$sloan_author == .y)))})) %>%
     mutate(size = map_int(net, gorder)) %>%
     filter(size > 0) %>%
-    mutate(n_comp = map_dbl(net, count_components), 
+    select(-size)
+
+## Generate rewired networks and calculate statistics
+net %>%
+    activate(edges) %>%
+    as_tibble() %>%
+    count(from, to) %>%
+    ## from is always < to
+    # mutate(lt = from < to) %>%
+    # count(lt)
+    pull(nn) %>%
+    summary()
+
+n_sims = 100      # num. rewired networks to generate per year
+frac_rewire = .4  # fraction of edges to rewire
+
+net_stats = net_by_year %>%
+    # slice(1:10) %>%
+    ## Draw rewired networks
+    mutate(iteration = list(1:n_sims)) %>%
+    unnest(iteration, .drop = FALSE) %>%
+    mutate(rewire = future_map(net, 
+                               ~ rewire(., 
+                                        keeping_degseq(niter = floor(frac_rewire/2 * length(E(.))))), 
+                               .progress = TRUE)#,
+           # sim = future_map(net, 
+           #             ~ sample_degseq(degree(.), 
+           #                             method = 'simple.no.multiple'),
+           #             .progress = TRUE)
+    ) %>%
+    select(-iteration) %>%
+    ## Long format
+    gather(key = net_type, value = net, net, rewire) %>%
+    filter(!duplicated(.)) %>%
+    ## Calculate statistics
+    mutate(size = map_int(net, gorder),
+           n_comp = map_dbl(net, count_components), 
            gc = map_dbl(net, ~ components(.)$csize %>% {./sum(.)} %>% max()),
            H = map_dbl(net, ~ {components(.)$csize %>% {./sum(.)} %>% {-sum(.*log2(.))}}), 
            mean_distance = map_dbl(net, mean_distance), 
@@ -99,6 +141,7 @@ net_by_year = cross_df(list(year = as.integer(unique(E(net)$year)),
            transitivity = map_dbl(net, transitivity), 
            density = map_dbl(net, ~ edge_density(simplify(.))))
 
+## Nice labels for the statistics
 stat_labels = tribble(
     ~ statistic, ~ pretty_name, 
     'size', 'num. authors', 
@@ -112,24 +155,32 @@ stat_labels = tribble(
 ) %>%
     mutate(pretty_name = fct_inorder(pretty_name))
 
-# ggplot(net_by_year, aes(year, H, color = sloan_author)) + 
-#     geom_line() + geom_point()
-
-net_by_year %>%
-    select(year, sloan_author, size:density) %>%
-    gather(key = statistic, value = value, size:density) %>%
+net_stats %>%
+    select(-net) %>%
+    gather(statistic, value, size:density) %>%
+    # filter(statistic == 'n_comp') %>%
     left_join(stat_labels) %>%
-    ggplot(aes(year, value, color = sloan_author)) + 
+    ggplot(aes(year, value)) +
     geom_vline(xintercept = 2008, color = 'grey40') +
-    geom_line() +
-    geom_point(size = .5) +
+    stat_summary(aes(fill = sloan_author),
+                 geom = 'ribbon',
+                 data = function(x) subset(x, net_type == 'rewire'), 
+                 fun.y = mean, 
+                 fun.ymax = function (y) {mean(y) + qnorm(.975)*sd(y)},
+                 fun.ymin = function (y) {mean(y) + qnorm(.025)*sd(y)},
+                 alpha = .25, 
+                 position = position_dodge(width = .5)) +
+    geom_line(aes(color = sloan_author), 
+              data = function(x) subset(x, net_type == 'net'), 
+              size = .5) +
     scale_color_brewer(palette = 'Set1', name = 'author set', labels = c('comparison', 'collaboration')) +
+    scale_fill_brewer(palette = 'Set1', name = 'author set', labels = c('comparison', 'collaboration')) +
     ylab('') +
     facet_wrap(~ pretty_name, scales = 'free') +
     theme_minimal(base_size = 8)
 
 ggsave('08_net_over_time.png', height = 4, width = 6)
-
+## Caption:  Network statistics over time.  See text for explanation of the different statistics calculated here.  Solid lines correspond to observed values; shaded ribbons correspond to 95% confidence intervals on rewired networks, where 40% of the observed edges are randomly rewired while maintaining each node's degree distributions.  100 rewired networks are generated for each author set-year combination.  Blue corresponds to the MoBE collaboration; red corresponds to the peer comparison set of authors.  
 
 
 ## Novel collaborations ----
