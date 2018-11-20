@@ -5,13 +5,14 @@ library(ggraph)
 library(furrr)
 
 ## Options for futures
-plan(multiprocess, workers = 2)
-options(future.globals.maxSize = 850*1024^2)
+plan(multiprocess, workers = 3)
+options(future.globals.maxSize = 850*1024^2) # 850 MB
 
 ## Load data
 net = read_rds('../Eisen-data/07_net_full.Rds')
 net_gc = read_rds('../Eisen-data/07_net_gc.Rds')
 
+#+ hairy_ball
 ## Plot GC over time ----
 ## - GC includes 97% of authors
 net %>%
@@ -30,7 +31,7 @@ net %>%
     mutate(frac = nn / sum(nn))
 
 ## - Consolidation of Sloan authors as collaboration develops
-plots = net_gc %>%
+plots = net %>%
     activate(edges) %>%
     ## Split into year groups
     morph(to_split, year_g, split_by = 'edges') %>%
@@ -63,6 +64,7 @@ ggsave('08_nets_wide.png', height = 4, width = 12)
 ## Caption:  Evolution of the extended collaboration network over time.  Points are authors; edges are annual publication collections.  Node and edge color distinguish Sloan authors and papers (blue) from authors/papers outside the collaboration (red).  Only authors in the giant component of the full (non-dynamic) network are included; only authors with at least 1 coauthor are included in each panel.  97% of all authors are in the giant component; 99.5% of Sloan collaboration authors are in the giant component.  Network layouts are calculated separately for each panel using the Fruchterman-Reingold algorithm with default parameters. 
 
 
+#+ stats_over_time
 ## Network statistics over time ----
 ## Heterophily over time
 net_gc %>%
@@ -99,6 +101,8 @@ net_by_year = cross_df(list(year = as.integer(unique(E(net)$year)),
     filter(size > 0) %>%
     select(-size)
 
+#+ rewire, cache = TRUE
+## Rewire ----
 ## Generate rewired networks and calculate statistics
 net %>%
     activate(edges) %>%
@@ -111,7 +115,8 @@ net %>%
     summary()
 
 n_sims = 100      # num. rewired networks to generate per year
-frac_rewire = .4  # fraction of edges to rewire
+frac_rewire = .05  # fraction of edges to rewire
+set.seed(24680)
 
 net_stats = net_by_year %>%
     # slice(1:10) %>%
@@ -122,25 +127,22 @@ net_stats = net_by_year %>%
                                ~ rewire(., 
                                         keeping_degseq(niter = floor(frac_rewire/2 * length(E(.))))), 
                                .progress = TRUE)#,
-           # sim = future_map(net, 
-           #             ~ sample_degseq(degree(.), 
-           #                             method = 'simple.no.multiple'),
-           #             .progress = TRUE)
     ) %>%
     select(-iteration) %>%
     ## Long format
     gather(key = net_type, value = net, net, rewire) %>%
     filter(!duplicated(.)) %>%
     ## Calculate statistics
-    mutate(size = map_int(net, gorder),
-           n_comp = map_dbl(net, count_components), 
-           gc = map_dbl(net, ~ components(.)$csize %>% {./sum(.)} %>% max()),
-           H = map_dbl(net, ~ {components(.)$csize %>% {./sum(.)} %>% {-sum(.*log2(.))}}), 
-           mean_distance = map_dbl(net, mean_distance), 
-           diameter = map_dbl(net, diameter), 
-           transitivity = map_dbl(net, transitivity), 
-           density = map_dbl(net, ~ edge_density(simplify(.))))
+    mutate(size = future_map_int(net, gorder),
+           n_comp = future_map_dbl(net, count_components), 
+           gc = future_map_dbl(net, ~ components(.)$csize %>% {./sum(.)} %>% max()),
+           H = future_map_dbl(net, ~ {components(.)$csize %>% {./sum(.)} %>% {-sum(.*log2(.))}}), 
+           mean_distance = future_map_dbl(net, mean_distance), 
+           diameter = future_map_dbl(net, diameter), 
+           transitivity = future_map_dbl(net, transitivity), 
+           density = future_map_dbl(net, ~ edge_density(simplify(.))))
 
+#+ stat_plots
 ## Nice labels for the statistics
 stat_labels = tribble(
     ~ statistic, ~ pretty_name, 
@@ -166,8 +168,8 @@ net_stats %>%
                  geom = 'ribbon',
                  data = function(x) subset(x, net_type == 'rewire'), 
                  fun.y = mean, 
-                 fun.ymax = function (y) {mean(y) + qnorm(.975)*sd(y)},
-                 fun.ymin = function (y) {mean(y) + qnorm(.025)*sd(y)},
+                 fun.ymax = function (y) {mean(y) + qnorm(.95)*sd(y)},
+                 fun.ymin = function (y) {mean(y) + qnorm(.05)*sd(y)},
                  alpha = .25, 
                  position = position_dodge(width = .5)) +
     geom_line(aes(color = sloan_author), 
@@ -180,9 +182,10 @@ net_stats %>%
     theme_minimal(base_size = 8)
 
 ggsave('08_net_over_time.png', height = 4, width = 6)
-## Caption:  Network statistics over time.  See text for explanation of the different statistics calculated here.  Solid lines correspond to observed values; shaded ribbons correspond to 95% confidence intervals on rewired networks, where 40% of the observed edges are randomly rewired while maintaining each node's degree distributions.  100 rewired networks are generated for each author set-year combination.  Blue corresponds to the MoBE collaboration; red corresponds to the peer comparison set of authors.  
+## Caption:  Network statistics over time.  See text for explanation of the different statistics calculated here.  Solid lines correspond to observed values; shaded ribbons correspond to 90% confidence intervals on rewired networks, where 5% of the observed edges are randomly rewired while maintaining each node's degree distributions.  100 rewired networks are generated for each author set-year combination.  Blue corresponds to the MoBE collaboration; red corresponds to the peer comparison set of authors.  
 
 
+#+ novel_collab, include = FALSE
 ## Novel collaborations ----
 ## Something like 5/8 of all coauthor dyads have their first pub in the collaboration
 # net %>%
