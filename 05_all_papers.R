@@ -8,7 +8,7 @@ library(doSNOW)
 
 source('api_key.R')
 
-author_histories = read_rds('../Eisen-data/04_papers_by_auid.Rds')
+author_histories = read_rds('../MoBE-data/04_papers_by_auid.Rds')
 
 ## Identify papers to retrieve
 papers_to_retrieve = author_histories %>%
@@ -19,7 +19,7 @@ papers_to_retrieve = author_histories %>%
 # get_metadata(this_paper, target_folder)
 
 ## Folder to store XML retrieved from API
-target_folder = '../Eisen-data/paper_metadata'
+target_folder = '../MoBE-data/paper_metadata'
 
 ## Functions for scraping from API ----
 scrape_ = function (this_sid) {
@@ -177,8 +177,8 @@ tictoc::toc()
 
 
 ## Save results ----
-write_rds(abstracts_df, '../Eisen-data/05_abstracts.Rds')
+write_rds(abstracts_df, '../MoBE-data/05_abstracts.Rds')
 
 abstracts_df %>%
     jsonlite::toJSON() %>%
-    write_lines('../Eisen-data/05_abstracts.json')
+    write_lines('../MoBE-data/05_abstracts.json')

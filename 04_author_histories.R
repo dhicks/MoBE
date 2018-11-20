@@ -6,8 +6,8 @@ library(stringr)
 source('api_key.R')
 
 ## Load dataframes of auids
-sloan_df_unfltd = read_rds('../Eisen-data/03_sloan_authors.Rds')
-comparison_df_unfltd = read_rds('../Eisen-data/03_comparison_authors.Rds')
+sloan_df_unfltd = read_rds('../MoBE-data/03_sloan_authors.Rds')
+comparison_df_unfltd = read_rds('../MoBE-data/03_comparison_authors.Rds')
 
 sloan_df = sloan_df_unfltd %>%
     unnest() %>%
@@ -24,7 +24,7 @@ auids_to_retrieve = unique(c(sloan_df$auid, comparison_df$auid))
 ## Download author records ----
 ## All* papers for each auid
 ## all* = 200 most recent papers published 2003-2018
-target_folder = '../Eisen-data/author_records'
+target_folder = '../MoBE-data/author_records'
 
 scrape_ = function (this_auid) {
     ## Basically just an abstraction of the RCurl call
@@ -101,4 +101,4 @@ parse = function (this_auid, target_folder) {
 papers_by_auid =  plyr::ldply(auids_to_retrieve, parse, target_folder, .progress = 'time')
 
 length(unique(papers_by_auid$scopus_id))
-write_rds(papers_by_auid, path = '../Eisen-data/04_papers_by_auid.Rds')
+write_rds(papers_by_auid, path = '../MoBE-data/04_papers_by_auid.Rds')

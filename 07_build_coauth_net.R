@@ -4,19 +4,19 @@ library(lubridate)
 library(igraph)
 library(tidygraph)
 
-# sloan_authors = read_rds('../Eisen-data/03_sloan_authors.Rds') %>%
+# sloan_authors = read_rds('../MoBE-data/03_sloan_authors.Rds') %>%
 #     filter(n_collaboration > 1) %>%
 #     unnest(auid) %>%
 #     pull(auid)
 
 ## NB logic here should be same as 04
-comparison_df_unfltd = read_rds('../Eisen-data/03_comparison_authors.Rds')
-sloan_authors = read_rds('../Eisen-data/03_sloan_authors.Rds') %>%
+comparison_df_unfltd = read_rds('../MoBE-data/03_comparison_authors.Rds')
+sloan_authors = read_rds('../MoBE-data/03_sloan_authors.Rds') %>%
     unnest() %>%
     mutate(in_comparison = auid %in% unlist(comparison_df_unfltd$auid)) %>%
     filter(n_collaboration > 1 | in_comparison) %>%
     pull(auid)
-comparison_authors = read_rds('../Eisen-data/03_comparison_authors.Rds') %>%
+comparison_authors = read_rds('../MoBE-data/03_comparison_authors.Rds') %>%
     unnest() %>%
     ungroup() %>%
     filter(!(auid %in% sloan_authors)) %>%
@@ -25,12 +25,12 @@ comparison_authors = read_rds('../Eisen-data/03_comparison_authors.Rds') %>%
 assertthat::assert_that(is_empty(intersect(sloan_authors, comparison_authors)), 
                         msg = 'Author lists overlap')
 
-sloan_papers = read_csv('../Eisen-data/00_Sloan.csv') %>%
+sloan_papers = read_csv('../MoBE-data/00_Sloan.csv') %>%
     filter(!is.na(DOI)) %>%
     pull(DOI) %>%
     unique()
 
-abstracts_df = read_rds('../Eisen-data/05_abstracts.Rds')  %>%
+abstracts_df = read_rds('../MoBE-data/05_abstracts.Rds')  %>%
     select(-keywords, -references) %>%
     mutate(date = ymd(date), 
            year = year(date)) %>%
@@ -95,5 +95,5 @@ net_gc = net %>%
     select(-component, -component_size)
 
 ## Save output ----
-write_rds(net, '../Eisen-data/07_net_full.Rds')
-write_rds(net_gc, '../Eisen-data/07_net_gc.Rds')
+write_rds(net, '../MoBE-data/07_net_full.Rds')
+write_rds(net_gc, '../MoBE-data/07_net_gc.Rds')

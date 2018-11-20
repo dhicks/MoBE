@@ -8,7 +8,7 @@ library(tidytext)
 
 ## Author self-classification
 threshold = 75
-self_classify = read_csv('../Eisen-data/00_authorlist.csv') %>%
+self_classify = read_csv('../MoBE-data/00_authorlist.csv') %>%
     rename(micro = `% Micro`, 
            building = `% Building`, 
            other = `% Other`, 
@@ -21,7 +21,7 @@ self_classify = read_csv('../Eisen-data/00_authorlist.csv') %>%
                                 TRUE                  ~ NA_character_))
 
 ## Paper abstracts + self-classification
-abstracts_df = read_rds('../Eisen-data/05_abstracts.Rds')  %>%
+abstracts_df = read_rds('../MoBE-data/05_abstracts.Rds')  %>%
     select(-keywords, -references) %>%
     mutate(date = ymd(date), 
            year = year(date)) %>%

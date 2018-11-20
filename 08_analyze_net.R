@@ -9,8 +9,8 @@ plan(multiprocess, workers = 3)
 options(future.globals.maxSize = 850*1024^2) # 850 MB
 
 ## Load data
-net = read_rds('../Eisen-data/07_net_full.Rds')
-net_gc = read_rds('../Eisen-data/07_net_gc.Rds')
+net = read_rds('../MoBE-data/07_net_full.Rds')
+net_gc = read_rds('../MoBE-data/07_net_gc.Rds')
 
 #+ hairy_ball
 ## Plot GC over time ----

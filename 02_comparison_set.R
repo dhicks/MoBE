@@ -5,9 +5,9 @@ n_authors = 1000 # Target size for comparison set
 
 ## Load data --------------------
 ## Papers in the Sloan collaboration
-collab_df = read_csv('../Eisen-data/00_Sloan.csv')
+collab_df = read_csv('../MoBE-data/00_Sloan.csv')
 ## All papers from the same journals
-load('../Eisen-data/01_all_papers.Rdata')
+load('../MoBE-data/01_all_papers.Rdata')
 
 ## Drop journals with a high number of publications
 ## Assumption here is that these are more general
@@ -57,6 +57,6 @@ comparison_papers = all_papers_df %>%
     ungroup() %>%
     nest(given, family)
 
-write_rds(comparison_papers, '../Eisen-data/02_comparison_papers.Rds')
+write_rds(comparison_papers, '../MoBE-data/02_comparison_papers.Rds')
 
 

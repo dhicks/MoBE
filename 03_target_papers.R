@@ -9,15 +9,15 @@ library(xml2)
 source('api_key.R')
 
 ## Sloan collaboration papers
-sloan_df = read_csv('../Eisen-data/00_Sloan.csv') %>%
+sloan_df = read_csv('../MoBE-data/00_Sloan.csv') %>%
     filter(!is.na(DOI))
 ## Comparison set
-comparison_df = read_rds('../Eisen-data/02_comparison_papers.Rds')
+comparison_df = read_rds('../MoBE-data/02_comparison_papers.Rds')
 
 dois = unique(c(sloan_df$DOI, comparison_df$doi))
 
 ## DOI-Scopus ID crosswalk ----
-sid_doi_xwalk_file = '../Eisen-data/03_doi_sid_xwalk.Rds'
+sid_doi_xwalk_file = '../MoBE-data/03_doi_sid_xwalk.Rds'
 if (!file.exists(sid_doi_xwalk_file)) {
     get_scopus_id = function (this_doi) {
         doi_base_url = 'https://api.elsevier.com/content/abstract/doi/'
@@ -51,7 +51,7 @@ sids = sids_df %>%
     filter(!is.na(sid)) %>% 
     pull(sid)
 
-target_folder = '../Eisen-data/paper_metadata'
+target_folder = '../MoBE-data/paper_metadata'
 
 scrape_ = function (this_sid) {
     ## Basically just an abstraction of the RCurl call
@@ -138,7 +138,7 @@ sloan_authors_df = sloan_df %>%
 ggplot(sloan_authors_df, aes(n_collaboration)) + stat_ecdf()
 filter(sloan_authors_df, n_collaboration > 1)
 
-write_rds(sloan_authors_df, '../Eisen-data/03_sloan_authors.Rds')
+write_rds(sloan_authors_df, '../MoBE-data/03_sloan_authors.Rds')
 
 ## Comparison set author IDs -----
 comparison_authors_df = comparison_df %>%
@@ -162,5 +162,5 @@ comparison_authors_df = comparison_df %>%
 intersect(simplify(comparison_authors_df$auid), 
           simplify(sloan_authors_df$auid))
 
-write_rds(comparison_authors_df, '../Eisen-data/03_comparison_authors.Rds')
+write_rds(comparison_authors_df, '../MoBE-data/03_comparison_authors.Rds')
 
