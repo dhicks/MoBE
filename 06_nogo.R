@@ -1,4 +1,8 @@
 #' This script examines the relationship between self-classified microbial-building-other values and potential predictors that might be used by a ML algorithm to predict those values.  
+#' 
+#' Note that this script depends on a datafile that is **not** included in the public repository.  
+
+stop('This script is included for documentary purposes and is not intended to be run in a reproduction of the original study.')
 
 ## Setup ----
 library(tidyverse)
