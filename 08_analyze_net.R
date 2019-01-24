@@ -30,6 +30,21 @@ net %>%
     group_by(sloan_author) %>%
     mutate(frac = nn / sum(nn))
 
+## - No authors w/ degree 0
+## This is a side effect of constructing the network using full_join()
+net %>%
+    mutate(deg = centrality_degree()) %>%
+    filter(deg == 0)
+
+## - Authors in small components
+net %>%
+    as_tibble() %>% 
+    add_count(component) %>% 
+    filter(nn < 10) %>% 
+    rename(scopus_id = name) %>%
+    mutate(scopus_url = str_c('https://www.scopus.com/authid/detail.uri?authorId=', scopus_id)) %>% 
+    arrange(desc(n), surname, given_name)
+
 ## - Consolidation of Sloan authors as collaboration develops
 plots = net %>%
     activate(edges) %>%
