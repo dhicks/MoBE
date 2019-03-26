@@ -18,7 +18,7 @@ cr_df = cr_df$data
 cr_df = cr_df %>%
     mutate(pub_date = parse_date_time(issued,
                                       orders = c('ymd', 'ym', 'y')),
-           issn = str_split(ISSN, ','))
+           issn = str_split(issn, ','))
 
 ## Construct canonical ISSNs --------------------
 canonical_issns = cr_df %>%
