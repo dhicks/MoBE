@@ -4,6 +4,8 @@ library(lubridate)
 library(igraph)
 library(tidygraph)
 
+library(assertthat)
+
 # sloan_authors = read_rds('../MoBE-data/03_sloan_authors.Rds') %>%
 #     filter(n_collaboration > 1) %>%
 #     unnest(auid) %>%
@@ -22,7 +24,7 @@ comparison_authors = read_rds('../MoBE-data/03_comparison_authors.Rds') %>%
     filter(!(auid %in% sloan_authors)) %>%
     pull(auid)
 
-assertthat::assert_that(is_empty(intersect(sloan_authors, comparison_authors)), 
+assert_that(is_empty(intersect(sloan_authors, comparison_authors)), 
                         msg = 'Author lists overlap')
 
 sloan_papers = read_csv('../MoBE-data/00_Sloan.csv') %>%
@@ -44,13 +46,13 @@ abstracts_df %>%
     pull(auid) %>%
     unique() %>%
     length() %>%
-    assertthat::are_equal(length(comparison_authors), 
+    are_equal(length(comparison_authors), 
                           msg = 'Length mismatch between non-Sloan and comparison authors')
 
 
 ## Node and edge dfs ----
 ## Edges: docs w/ more than 2 authors in the dataset
-edges = abstracts_df %>%
+edges_unsimp = abstracts_df %>%
     select(scopus_id:date, year, sloan_paper, auid, sloan_author) %>%
     ## Make pairs by joining on everything other than auids
     full_join(., ., 
@@ -58,8 +60,10 @@ edges = abstracts_df %>%
     filter(auid.x < auid.y) %>%
     ## Put the auids on the left side of the df and rename
     select(auid.x, auid.y, everything()) %>%
-    mutate(heterophily = sloan_author.x != sloan_author.y) %>%
-    ## Simplify
+    mutate(heterophily = sloan_author.x != sloan_author.y)
+
+## Simplify
+edges = edges_unsimp %>%
     count(auid.x, auid.y, year, sloan_paper, heterophily) %>%
     mutate(year_g = cut(year, 4))
 
