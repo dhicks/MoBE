@@ -12,6 +12,9 @@ options(future.globals.maxSize = 850*1024^2) # 850 MB
 net = read_rds('../MoBE-data/07_net_full.Rds')
 net_gc = read_rds('../MoBE-data/07_net_gc.Rds')
 
+## Paper count threshold to use for filtered variant
+filter_threshold = 50
+
 #+ hairy_ball
 ## Plot GC over time ----
 ## - GC includes 97% of authors
@@ -19,7 +22,7 @@ net %>%
     activate(nodes) %>%
     as_tibble() %>%
     count(component) %>%
-    mutate(frac = nn / sum(nn))
+    mutate(frac = n / sum(n))
 
 ## - Only 2 components contain Sloan authors; 99.5% in GC
 net %>%
@@ -28,7 +31,7 @@ net %>%
     count(component, sloan_author) %>%
     arrange(desc(sloan_author), component) %>%
     group_by(sloan_author) %>%
-    mutate(frac = nn / sum(nn))
+    mutate(frac = n / sum(n))
 
 ## - No authors w/ degree 0
 ## This is a side effect of constructing the network using full_join()
@@ -39,13 +42,22 @@ net %>%
 ## - Authors in small components
 net %>%
     as_tibble() %>% 
-    add_count(component) %>% 
-    filter(nn < 10) %>% 
+    add_count(component, name = 'nn') %>% 
+    filter(n < 10) %>% 
     rename(scopus_id = name) %>%
     mutate(scopus_url = str_c('https://www.scopus.com/authid/detail.uri?authorId=', scopus_id)) %>% 
     arrange(desc(n), surname, given_name)
 
 ## - Consolidation of Sloan authors as collaboration develops
+## Convert half-open interval notation into dashed notation
+ho_to_dashed = function(interval) {
+    ends = str_extract_all(interval, '[0-9]{4}', simplify = TRUE)
+    left = as.character(as.integer(ends[,1]) + 1)
+    right = ends[,2]
+    dashed = str_c(left, '-', right)
+    return(dashed)
+}
+
 plots = net %>%
     activate(edges) %>%
     ## Split into year groups
@@ -57,6 +69,7 @@ plots = net %>%
     crystallize() %>%
     ## Generate plots for each year group
     mutate(years = str_extract(name, '\\(.*\\]'),
+           years = ho_to_dashed(years),
            plot = map2(graph, years,
                        ~ ggraph(.x, layout = 'fr') +
                            geom_edge_fan(aes(color = sloan_paper), #width = n), 
@@ -106,12 +119,21 @@ net_gc %>%
 ## Split out into cumulative annual networks
 ## NB whole network, not just GC
 net_by_year = cross_df(list(year = as.integer(unique(E(net)$year)), 
-                            sloan_author = c(TRUE, FALSE))) %>%
-    arrange(year, sloan_author) %>%
+                            sloan_author = c(TRUE, FALSE), 
+                            filtered = c(TRUE, FALSE))) %>%
+    arrange(year, sloan_author, filtered) %>%
+    ## Subset by year
     mutate(net = map2(year, sloan_author, 
                       ~ {net %>%
                               subgraph.edges(which((E(net)$year <= .x))) %>%
                               induced_subgraph(., which((V(.)$sloan_author == .y)))})) %>%
+    ## Create filtered versions
+    mutate(net = map(net, as_tbl_graph),
+           net = map2(net, filtered, 
+                      ~ifelse(.y, 
+                              list(filter(.x, n >= filter_threshold)), 
+                              list(.x))), 
+           net = flatten(net)) %>% 
     mutate(size = map_int(net, gorder)) %>%
     filter(size > 0) %>%
     select(-size)
@@ -126,7 +148,7 @@ net %>%
     ## from is always < to
     # mutate(lt = from < to) %>%
     # count(lt)
-    pull(nn) %>%
+    pull(n) %>%
     summary()
 
 n_sims = 100      # num. rewired networks to generate per year
@@ -181,22 +203,29 @@ net_stats %>%
     geom_vline(xintercept = 2008, color = 'grey40') +
     stat_summary(aes(fill = sloan_author),
                  geom = 'ribbon',
-                 data = function(x) subset(x, net_type == 'rewire'), 
-                 fun.y = mean, 
+                 data = function(x) subset(x, net_type == 'rewire'),
+                 fun.y = mean,
                  fun.ymax = function (y) {mean(y) + qnorm(.95)*sd(y)},
                  fun.ymin = function (y) {mean(y) + qnorm(.05)*sd(y)},
-                 alpha = .25, 
+                 alpha = .25,
                  position = position_dodge(width = .5)) +
-    geom_line(aes(color = sloan_author), 
+    geom_line(aes(color = sloan_author, linetype = filtered), 
               data = function(x) subset(x, net_type == 'net'), 
               size = .5) +
     scale_color_brewer(palette = 'Set1', name = 'author set', labels = c('comparison', 'collaboration')) +
     scale_fill_brewer(palette = 'Set1', name = 'author set', labels = c('comparison', 'collaboration')) +
     ylab('') +
+    scale_linetype_discrete(name = 'filtering', 
+                            labels = c('none', 
+                                       str_c('≥', 
+                                             filter_threshold, 
+                                             ' papers'))) +
     facet_wrap(~ pretty_name, scales = 'free') +
     theme_minimal(base_size = 8)
 
 ggsave('08_net_over_time.png', height = 4, width = 6)
+ggsave('08_net_over_time.tiff', height = 4, width = 6, 
+       compression = 'lzw')
 ## Caption:  Network statistics over time.  See text for explanation of the different statistics calculated here.  Solid lines correspond to observed values; shaded ribbons correspond to 90% confidence intervals on rewired networks, where 5% of the observed edges are randomly rewired while maintaining each node's degree distributions.  100 rewired networks are generated for each author set-year combination.  Blue corresponds to the MoBE collaboration; red corresponds to the peer comparison set of authors.  
 
 
