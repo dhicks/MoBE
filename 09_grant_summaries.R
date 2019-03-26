@@ -24,10 +24,10 @@ awards_df = readxl::read_excel(str_c(data_dir,
 count(awards_df, organization) %>% 
     arrange(desc(n)) %>% 
     filter(n >= 3) %>% 
-    rename_all(str_to_sentence) %>% 
-    knitr::kable() %>% 
-    str_c(collapse = '\n') %>% 
-    write_file(path = '09_orgs.md')
+    knitr::kable(format = 'latex', booktabs = TRUE,
+                 label = 'mobe_orgs',
+                 caption = 'Organizations that received 3 or more awards under the MoBE program.  Awards include research funding as well as funds for meeting organization, data infrastructure development, outreach, and other categories.  n: Number of awards received.') %>% 
+    write_file(path = '09_orgs.tex')
 
 
 ## Plots ----
