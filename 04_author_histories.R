@@ -23,7 +23,7 @@ auids_to_retrieve = unique(c(sloan_df$auid, comparison_df$auid))
 
 ## Download author records ----
 ## All* papers for each auid
-## all* = 200 most recent papers published 2003-2018
+## all* = 200 most recent papers published 1999-2018
 target_folder = '../MoBE-data/author_records'
 
 scrape_ = function (this_auid) {
@@ -33,20 +33,17 @@ scrape_ = function (this_auid) {
                       'query=au-id(', this_auid, ')', '&',
                       'apiKey=', api_key, '&',
                       'count=200', '&',
-                      'date=2003-2018', '&',
+                      'date=1999-2018', '&',
                       'httpAccept=application/xml')
     raw = getURL(query_url)
     raw
 }
 scrape = function (this_auid, target_folder) {
     ## Either scrape from the API + save the result OR pass
-    target_file_xml = str_c(target_folder, '/', this_auid, '.xml')
-    target_file = str_c(target_folder, '/', this_auid, '.xml.zip')
+    target_file = str_c(target_folder, '/', this_auid, '.xml')
     if (!file.exists(target_file)) {
         raw = scrape_(this_auid)
-        write_file(raw, target_file_xml)
-        zip(target_file, target_file_xml, flags = '-9Xq')
-        unlink(target_file_xml)
+        write_file(raw, target_file)
         return(TRUE)
     } else {
         return(TRUE)
@@ -59,7 +56,7 @@ plyr::l_ply(auids_to_retrieve, scrape, target_folder, .progress = 'time')
 
 ## Parse author records ----
 parse = function (this_auid, target_folder) {
-    target_file = str_c(target_folder, '/', this_auid, '.xml.zip')
+    target_file = str_c(target_folder, '/', this_auid, '.xml')
     # print(target_file)
     raw = read_file(target_file)
     

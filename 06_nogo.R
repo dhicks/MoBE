@@ -2,7 +2,7 @@
 #' 
 #' Note that this script depends on a datafile that is **not** included in the public repository.  
 
-stop('This script is included for documentary purposes and is not intended to be run in a reproduction of the original study.')
+# stop('This script is included for documentary purposes and is not intended to be run in a reproduction of the original study.')
 
 ## Setup ----
 library(tidyverse)
@@ -29,7 +29,7 @@ abstracts_df = read_rds('../MoBE-data/05_abstracts.Rds')  %>%
     select(-keywords, -references) %>%
     mutate(date = ymd(date), 
            year = year(date)) %>%
-    filter(year < 2008) %>%
+    filter(year < 2004) %>%
     unnest(authors, .drop = FALSE) %>%
     left_join(self_classify)
 
@@ -62,7 +62,7 @@ abstracts_df %>%
 acm = abstracts_df %>%
     unnest(subjects) %>%
     count(auid, subject_area) %>%
-    spread(key = subject_area, value = nn, fill = 0) %>%
+    spread(key = subject_area, value = n, fill = 0) %>%
     as.data.frame() %>%
     column_to_rownames(var = 'auid')
 
@@ -102,7 +102,7 @@ tictoc::tic()
 atm = abstracts_df %>%
     unnest_tokens(word, abstract) %>%
     count(auid, word) %>%
-    spread(key = word, value = nn, fill = 0) %>%
+    spread(key = word, value = n, fill = 0) %>%
     as.data.frame() %>%
     column_to_rownames(var = 'auid')
 tictoc::toc()
@@ -154,7 +154,7 @@ high_inform_words = abstracts_df %>%
     unnest_tokens(word, abstract) %>%
     ## Word frequency in each category
     count(category, word) %>%
-    rename(word_category = nn) %>%
+    rename(word_category = n) %>%
     group_by(word) %>%
     mutate(word_tot = sum(word_category), ## Word freq. across all cats
            prob_cat_word = word_category / word_tot, ## p(category | word)
@@ -204,3 +204,6 @@ hi_words_pc$x %>%
 #' This is the most promising biplot, with some signs of separation between the discrete categories.  However, the boundary between the categories is narrow, especially as we approach the tightly-packed points near the origin.  A machine learning algorithm would require much more data in this area to work reliably.  
 #' 
 #' Alternatively, distance along the first principal component extracted from high-information words might make a good metric for distances between researchers.  
+
+
+sessionInfo()

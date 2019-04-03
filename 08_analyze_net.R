@@ -6,7 +6,7 @@ library(furrr)
 
 ## Options for futures
 plan(multiprocess, workers = 3)
-options(future.globals.maxSize = 850*1024^2) # 850 MB
+options(future.globals.maxSize = 900*1024^2) # 900 MB
 
 ## Load data
 net = read_rds('../MoBE-data/07_net_full.Rds')
@@ -24,7 +24,7 @@ net %>%
     count(component) %>%
     mutate(frac = n / sum(n))
 
-## - Only 2 components contain Sloan authors; 99.5% in GC
+## - Only 1 component contains Sloan authors
 net %>%
     activate(nodes) %>%
     as_tibble() %>%
@@ -43,7 +43,7 @@ net %>%
 net %>%
     as_tibble() %>% 
     add_count(component, name = 'nn') %>% 
-    filter(n < 10) %>% 
+    filter(nn < 10) %>% 
     rename(scopus_id = name) %>%
     mutate(scopus_url = str_c('https://www.scopus.com/authid/detail.uri?authorId=', scopus_id)) %>% 
     arrange(desc(n), surname, given_name)
@@ -89,7 +89,7 @@ cowplot::plot_grid(plotlist = plots$plot)
 ggsave('08_nets.png', height = 6, width = 6)
 cowplot::plot_grid(plotlist = plots$plot, nrow = 1)
 ggsave('08_nets_wide.png', height = 4, width = 12)
-## Caption:  Evolution of the extended collaboration network over time.  Points are authors; edges are annual publication collections.  Node and edge color distinguish Sloan authors and papers (blue) from authors/papers outside the collaboration (red).  Only authors in the giant component of the full (non-dynamic) network are included; only authors with at least 1 coauthor are included in each panel.  97% of all authors are in the giant component; 99.5% of Sloan collaboration authors are in the giant component.  Network layouts are calculated separately for each panel using the Fruchterman-Reingold algorithm with default parameters. 
+## Caption:  Evolution of the extended collaboration network over time.  Points are authors; edges are annual publication collections.  Node and edge color distinguish Sloan authors and papers (blue) from authors/papers outside the collaboration (red).  Only authors in the giant component of the full (non-dynamic) network are included; only authors with at least 1 coauthor are included in each panel.  97% of all authors are in the giant component; all Sloan collaboration authors are in the giant component.  Network layouts are calculated separately for each panel using the Fruchterman-Reingold algorithm with default parameters. 
 
 
 #+ stats_over_time
@@ -138,7 +138,7 @@ net_by_year = cross_df(list(year = as.integer(unique(E(net)$year)),
     filter(size > 0) %>%
     select(-size)
 
-#+ rewire, cache = TRUE
+#+ rewire, cache = TRUE, cache.lazy = FALSE
 ## Rewire ----
 ## Generate rewired networks and calculate statistics
 net %>%
@@ -200,10 +200,11 @@ net_stats %>%
     # filter(statistic == 'n_comp') %>%
     left_join(stat_labels) %>%
     ggplot(aes(year, value)) +
-    geom_vline(xintercept = 2008, color = 'grey40') +
+    geom_vline(xintercept = 2004, color = 'grey40') +
     stat_summary(aes(fill = sloan_author),
                  geom = 'ribbon',
-                 data = function(x) subset(x, net_type == 'rewire'),
+                 data = function(x) subset(x, net_type == 'rewire' & 
+                                               !filtered),
                  fun.y = mean,
                  fun.ymax = function (y) {mean(y) + qnorm(.95)*sd(y)},
                  fun.ymin = function (y) {mean(y) + qnorm(.05)*sd(y)},
@@ -226,7 +227,7 @@ net_stats %>%
 ggsave('08_net_over_time.png', height = 4, width = 6)
 ggsave('08_net_over_time.tiff', height = 4, width = 6, 
        compression = 'lzw')
-## Caption:  Network statistics over time.  See text for explanation of the different statistics calculated here.  Solid lines correspond to observed values; shaded ribbons correspond to 90% confidence intervals on rewired networks, where 5% of the observed edges are randomly rewired while maintaining each node's degree distributions.  100 rewired networks are generated for each author set-year combination.  Blue corresponds to the MoBE collaboration; red corresponds to the peer comparison set of authors.  
+## Caption:  Network statistics over time.  See text for explanation of the different statistics calculated here.  Solid lines correspond to observed values; shaded ribbons correspond to 90% confidence intervals on rewired networks, where 5% of the observed edges are randomly rewired while maintaining each node's degree distributions.  100 rewired networks are generated for each author set-year combination.  Dashed lines correspond to observed values for authors with 50 or more total papers in the data.  Blue corresponds to the MoBE collaboration; red corresponds to the peer comparison set of authors.  Vertical lines indicate 2004, the first year of research funding by the MoBE program.  Due to publication lags, we would not expect to see effects from 2004 funding until 2006-07.  
 
 
 #+ novel_collab, include = FALSE
@@ -243,4 +244,4 @@ ggsave('08_net_over_time.tiff', height = 4, width = 6,
 #     pull(first_in_collab) %>%
 #     table()
 
-
+sessionInfo()

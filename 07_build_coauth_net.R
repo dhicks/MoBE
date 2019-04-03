@@ -50,6 +50,26 @@ abstracts_df %>%
                           msg = 'Length mismatch between non-Sloan and comparison authors')
 
 
+## Paper count table ----
+n_distinct(abstracts_df$scopus_id)
+
+abstracts_df %>% 
+    group_by(scopus_id) %>% 
+    summarize(mobe_paper = any(sloan_paper), 
+              mobe_authors = any(sloan_author), 
+              comp_authors = any(!sloan_author)) %>% 
+    mutate(author_case = case_when(mobe_authors & comp_authors ~ 'mixed', 
+                                   mobe_authors & !comp_authors ~ 'mobe only', 
+                                   !mobe_authors & comp_authors ~ 'comp only', 
+                                   TRUE ~ NA_character_)) %>% 
+    count(mobe_paper, author_case) %>% 
+    arrange(desc(n)) %>% 
+    ## Confirm that paper counts add up correctly
+    pull(n) %>% 
+    sum() %>% 
+    are_equal(n_distinct(abstracts_df$scopus_id))
+
+
 ## Node and edge dfs ----
 ## Edges: docs w/ more than 2 authors in the dataset
 edges_unsimp = abstracts_df %>%
@@ -89,7 +109,7 @@ net %>%
     activate(nodes) %>%
     as_tibble() %>%
     count(component) %>%
-    mutate(frac = nn / sum(nn))
+    mutate(frac = n / sum(n))
 
 net_gc = net %>%
     morph(to_components) %>%
@@ -97,6 +117,11 @@ net_gc = net %>%
     unmorph() %>% 
     filter(component_size == max(component_size)) %>%
     select(-component, -component_size)
+
+## Authors who were dropped bc they didn't have collaborations in the data
+authors %>% 
+    filter(! auid %in% V(net)$name) %>% 
+    count(sloan_author)
 
 ## Save output ----
 write_rds(net, '../MoBE-data/07_net_full.Rds')

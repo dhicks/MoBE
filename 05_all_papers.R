@@ -143,7 +143,7 @@ parser = function(scopus_id, target_folder) {
 }
 
 ## ~ 2 hours
-cl = makeCluster(3)
+cl = makeCluster(2)
 registerDoSNOW(cl)
 pb = txtProgressBar(max = length(papers_to_retrieve), style = 3)
 progress = function(n) setTxtProgressBar(pb, n)
